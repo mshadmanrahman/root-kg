@@ -31,7 +31,13 @@ def _extract_title(content: str, filename: str) -> str:
 
 
 def _extract_date(content: str, file_path: Path) -> str | None:
-    """Extract date from frontmatter or filename."""
+    """Extract date from frontmatter, filename, or title.
+
+    Supports multiple date formats:
+    - YAML frontmatter: date: or created: field
+    - Filename with dashes: 2026-03-19
+    - Filename/title with spaces: 2026 03 19 (common in Obsidian/Granola)
+    """
     # Try frontmatter
     fm_match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
     if fm_match:
@@ -44,6 +50,11 @@ def _extract_date(content: str, file_path: Path) -> str | None:
     date_match = re.search(r"(\d{4}-\d{2}-\d{2})", file_path.name)
     if date_match:
         return date_match.group(1)
+
+    # Try date in filename with spaces (YYYY MM DD)
+    space_match = re.search(r"(\d{4})\s+(\d{2})\s+(\d{2})", file_path.stem)
+    if space_match:
+        return f"{space_match.group(1)}-{space_match.group(2)}-{space_match.group(3)}"
 
     return None
 

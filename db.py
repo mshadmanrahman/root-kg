@@ -228,7 +228,8 @@ class RootDB:
                 n.path,
                 n.title,
                 n.folder,
-                n.source_type
+                n.source_type,
+                n.created_at
             FROM chunks_vec cv
             JOIN chunks c ON c.id = cv.chunk_id
             JOIN notes n ON n.id = c.note_id
