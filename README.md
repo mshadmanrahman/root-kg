@@ -48,6 +48,10 @@ meeting. Timeline: Option B pricing model by mid-January.
 
 ## How It Works
 
+<p align="center">
+  <img src="assets/architecture.png" alt="ROOT Architecture - Entity Graph, Semantic Search, Multi-Source" width="800">
+</p>
+
 ROOT builds three layers on top of your notes:
 
 ```
@@ -115,6 +119,11 @@ Note: "Ric discussed Heimdall timeline. Sebastian architected the API."
 ```
 
 ### GraphRAG: The Intelligence Layer
+
+<p align="center">
+  <img src="assets/graphrag-comparison.png" alt="Vector Search vs GraphRAG" width="800">
+</p>
+
 `root_ask` fuses all three layers:
 1. **Semantic search** finds the 5 most relevant chunks
 2. **Entity graph** pulls the neighborhood of mentioned entities
@@ -123,6 +132,10 @@ Note: "Ric discussed Heimdall timeline. Sebastian architected the API."
 This consistently outperforms pure vector search for multi-hop questions.
 
 ## Quick Start
+
+<p align="center">
+  <img src="assets/terminal.png" alt="ROOT extraction running in terminal" width="700">
+</p>
 
 ```bash
 # Clone and setup
