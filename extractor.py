@@ -112,7 +112,12 @@ def _extract_note(
     # Store entities
     entity_ids = {}
     for ent in result.get("entities", []):
-        ent_name = ent["name"].strip()
+        if not isinstance(ent, dict):
+            continue
+        ent_name = ent.get("name", "")
+        if not isinstance(ent_name, str):
+            continue
+        ent_name = ent_name.strip()
         ent_type = ent.get("type", "concept")
         if not ent_name:
             continue
@@ -134,8 +139,10 @@ def _extract_note(
     # Store relations
     relation_count = 0
     for rel in result.get("relations", []):
-        from_name = rel.get("from_entity", "").strip()
-        to_name = rel.get("to_entity", "").strip()
+        if not isinstance(rel, dict):
+            continue
+        from_name = (rel.get("from_entity") or "").strip()
+        to_name = (rel.get("to_entity") or "").strip()
         rel_type = rel.get("relation", "discussed")
 
         a_id = entity_ids.get(from_name) or db.resolve_entity(from_name)
