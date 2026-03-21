@@ -1,0 +1,36 @@
+# ROOT Configuration
+# Copy to config.yaml and edit, or run: python -m root init
+
+vault:
+  # Path to your Obsidian vault (or any folder of markdown files)
+  path: "~/Documents/My Vault"
+  exclude_folders:
+    - ".obsidian"
+    - ".trash"
+    - "templates"
+  exclude_patterns:
+    - "*.excalidraw.md"
+
+embeddings:
+  # Local model, free, runs on CPU. No API key needed.
+  model: "all-MiniLM-L6-v2"
+  max_chunk_tokens: 2000
+  split_on_headings: true
+
+database:
+  path: "data/root.db"
+
+indexer:
+  log_dir: "logs"
+  batch_size: 64
+
+llm:
+  # Backend options:
+  #   "anthropic" - Direct Anthropic API (needs ANTHROPIC_API_KEY in .env)
+  #   "openrouter" - OpenRouter API (needs OPENROUTER_API_KEY, free $1 credit)
+  #   "ollama" - Local LLM via Ollama (free, no API key needed)
+  backend: "anthropic"
+  extraction_model: "claude-haiku-4-5-20251001"
+  synthesis_model: "claude-sonnet-4-20250514"
+  max_content_chars: 6000
+  batch_delay_ms: 100

@@ -1,0 +1,42 @@
+[project]
+name = "root-kg"
+version = "1.0.0"
+description = "Personal knowledge graph with entity extraction, GraphRAG, and MCP integration. Turns your notes into searchable intelligence."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Shadman Rahman", email = "connectshadman@gmail.com"},
+]
+keywords = ["knowledge-graph", "mcp", "rag", "obsidian", "personal-knowledge", "entity-extraction", "semantic-search"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Indexing",
+]
+dependencies = [
+    "sentence-transformers>=3.0.0",
+    "sqlite-vec>=0.1.1",
+    "mcp>=1.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/mshadmanrahman/root-kg"
+Repository = "https://github.com/mshadmanrahman/root-kg"
+Issues = "https://github.com/mshadmanrahman/root-kg/issues"
+
+[project.scripts]
+root-kg = "cli:main"
+root-index = "indexer:main"
+root-server = "server:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
