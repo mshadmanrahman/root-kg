@@ -14,6 +14,10 @@
 </p>
 
 <p align="center">
+  <img src="assets/hero.png" alt="ROOT - Ask a question, see the graph, get a cited answer" width="800">
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#how-it-works">How It Works</a> &bull;
   <a href="#18-mcp-tools">Tools</a> &bull;
