@@ -18,8 +18,9 @@
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick Start</a> &bull;
+  <a href="#what-root-does">What It Does</a> &bull;
   <a href="#how-it-works">How It Works</a> &bull;
+  <a href="#quick-start">Quick Start</a> &bull;
   <a href="#18-mcp-tools">Tools</a> &bull;
   <a href="#llm-backends">LLM Backends</a> &bull;
   <a href="#use-cases">Use Cases</a>
@@ -27,109 +28,137 @@
 
 ---
 
-## The Problem
+## What ROOT Does
 
 You have knowledge everywhere. Obsidian vault. Meeting transcripts. Email threads. Slack messages. When you need to answer "Who influences this project?" or "How did this decision evolve?", you're manually searching across systems, holding the mental model in your head.
 
-**ROOT fixes this.** It indexes everything, extracts entities and relations, builds a graph, and gives your AI tools a way to query it all in real-time.
+**ROOT fixes this.** It turns your scattered notes, meetings, and emails into an interconnected, queryable intelligence layer. Think of it as a "second brain" that actually understands the relationships between people, projects, decisions, and events across your entire professional life.
 
 ```
-> root_ask("What decisions were made about the pricing model?")
+> root_ask("What decisions were made about FoS Simplification?")
 
 # ROOT Answer
 
-Ric is developing a new pricing model with weighted intensity scoring,
-school ranking, course count, and FOS difficulty metrics. This was
-discussed in the 1-1 with Ric (Feb 2026) and the ESP Lead Capping
-meeting. Timeline: Option B pricing model by mid-January.
+Leadership APPROVED the FoS Simplification project on March 17, 2026.
+The FOS list was locked and finalized at the kick-off meeting on March 23.
+Scope: consolidate 1,541 field of studies down to 131 across 16 groups,
+based on Times Higher Education framework. Owner: Sadia Hamid (coordinator),
+Marco/Simon (engineering). Sprint start: April 7.
 
-*Based on 5 search results and 3 entity matches.*
+*Based on 5 search results and 2 entity matches.*
 ```
 
+### The Value
+
+**Ask questions across all your knowledge.** Instead of manually searching through thousands of notes, ask ROOT in plain English. It synthesizes answers with citations from every source.
+
+**See connections you'd never find manually.** ROOT builds an entity graph. It knows that "Sadia" from the kick-off meeting is the same "Sadia Hamid" from the planning session, and that she's connected to "Simon" via an implementation dependency. You can traverse these connections across hundreds of notes.
+
+**Meeting intelligence without manual notes.** Your meetings get ingested and entity-extracted. After a week of meetings, ask "What did I commit to this week?" and get an answer that spans all of them.
+
+### What Makes It Different From Searching Obsidian
+
+| Obsidian search | ROOT |
+|----------------|------|
+| Keyword matching | Semantic understanding ("lead decline" finds "traffic drop" notes) |
+| Shows files | Shows synthesized answers with citations |
+| No entity awareness | Knows people, projects, decisions as first-class objects |
+| No cross-source | Combines vault + meetings + emails + Slack |
+| Manual navigation | Traverses relationship graph automatically |
+| One note at a time | Aggregates across hundreds of notes per query |
+
+---
+
 ## How It Works
+
+ROOT has a four-step pipeline: ingest, embed, extract, query.
 
 <p align="center">
   <img src="assets/architecture.png" alt="ROOT Architecture - Entity Graph, Semantic Search, Multi-Source" width="800">
 </p>
 
-ROOT builds three layers on top of your notes:
-
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        root_ask (GraphRAG)                      │
-│              Semantic Search + Graph + LLM Synthesis             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────────┐    ┌──────────────────────────────────┐  │
-│  │  LAYER 1          │    │  LAYER 3                         │  │
-│  │  Semantic Search   │    │  Entity Graph                    │  │
-│  │                    │    │                                  │  │
-│  │  "pricing model"   │    │  [Ric] ──owns──▶ [Pricing Model] │  │
-│  │       ↓            │    │    │                     │        │  │
-│  │  ┌──────────┐      │    │    ├──discussed──▶ [Heimdall]    │  │
-│  │  │ chunk 1  │ 0.92 │    │    │                     │        │  │
-│  │  │ chunk 2  │ 0.87 │    │    └──works_with──▶ [Scott]      │  │
-│  │  │ chunk 3  │ 0.84 │    │                                  │  │
-│  │  └──────────┘      │    │  Recursive CTE traversal on      │  │
-│  │  384-dim vectors   │    │  SQLite. <10ms at depth 2.       │  │
-│  └──────────────────┘    └──────────────────────────────────┘  │
-│                                                                 │
-├─────────────────────────────────────────────────────────────────┤
-│  LAYER 2: Multi-Source Ingestion                                │
-│                                                                 │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
-│  │ Obsidian  │  │ Meetings │  │  Email   │  │  Slack   │      │
-│  │  Vault    │  │ (Granola)│  │ (Gmail)  │  │          │      │
-│  └─────┬────┘  └─────┬────┘  └─────┬────┘  └─────┬────┘      │
-│        └──────────────┴──────────────┴──────────────┘           │
-│                           ↓                                     │
-│              ┌────────────────────────┐                         │
-│              │   data/root.db         │                         │
-│              │   Single SQLite file   │                         │
-│              │   Notes + Embeddings   │                         │
-│              │   Entities + Relations │                         │
-│              └────────────────────────┘                         │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      DATA SOURCES                             │
+│                                                               │
+│  Obsidian Vault        meetings (Granola)        emails       │
+│  2,500+ notes          auto or manual            Gmail MCP    │
+│  auto every 2h         via root_ingest           via ingest   │
+└──────────────┬───────────────┬───────────────┬───────────────┘
+               │               │               │
+               ▼               ▼               ▼
+┌──────────────────────────────────────────────────────────────┐
+│           STEP 1: INDEXING (free, runs locally)               │
+│                                                               │
+│  Content hashing (SHA-256) for incremental updates            │
+│  Markdown-aware chunking (splits on headings)                 │
+│  Local embeddings: all-MiniLM-L6-v2 (384 dims, CPU)          │
+│  Stored in SQLite + sqlite-vec                                │
+│                                                               │
+│  Cost: $0. No API calls. ~2 min for 2,500 notes.             │
+└──────────────┬───────────────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────────────┐
+│           STEP 2: ENTITY EXTRACTION (pennies/day)             │
+│                                                               │
+│  For each new/changed note, an LLM extracts:                  │
+│                                                               │
+│  Entities: people, projects, decisions, events,               │
+│            concepts, organizations                            │
+│  Relations: works_with, owns, decided, discussed,             │
+│             blocked_by, depends_on, manages, etc.             │
+│  Confidence: 0.9+ explicit, 0.7 implied, 0.5 weak signals    │
+│  Aliases: "Fredrik" = "Frederick", "FoS" = "Field of Study"  │
+│                                                               │
+│  Model: Claude Haiku (~$0.003 per note)                       │
+│  Daily cost: pennies (only changed notes reprocessed)         │
+└──────────────┬───────────────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────────────┐
+│           STEP 3: KNOWLEDGE GRAPH (stored in SQLite)          │
+│                                                               │
+│  ┌───────────┐     ┌────────────┐     ┌────────────┐        │
+│  │ entities  │────▶│ relations  │◀────│  aliases   │        │
+│  │  13,000+  │     │  20,000+   │     │   8,000+   │        │
+│  └───────────┘     └────────────┘     └────────────┘        │
+│       │                                                       │
+│       ▼                                                       │
+│  ┌──────────────┐   ┌───────────────┐                        │
+│  │ entity-note  │   │    notes      │                        │
+│  │   links      │   │ with chunks   │                        │
+│  │  28,000+     │   │  & embeddings │                        │
+│  └──────────────┘   └───────────────┘                        │
+│                                                               │
+│  Graph traversal via recursive CTEs. <10ms at depth 2.        │
+│  Everything in one SQLite file. No Postgres, no Neo4j.        │
+└──────────────┬───────────────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────────────┐
+│           STEP 4: QUERY (on demand, via MCP)                  │
+│                                                               │
+│  root_ask combines all three layers:                          │
+│  1. Semantic search finds the 5 most relevant chunks          │
+│  2. Entity graph pulls the neighborhood of mentioned entities │
+│  3. Claude Sonnet synthesizes a cited, natural language answer │
+│                                                               │
+│  This consistently outperforms pure vector search for         │
+│  multi-hop questions ("Who decided X and what happened next?")│
+│                                                               │
+│  Cost: ~$0.01 per query                                       │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### Layer 1: Semantic Search
-Every note is embedded locally using `all-MiniLM-L6-v2` (free, CPU, 384 dims). Search finds notes by *meaning*, not just keywords.
+### The Two-Model Strategy
 
-### Layer 2: Multi-Source Ingestion
-Pull content from any source via MCP adapters. Meetings, email, Slack: everything goes into one unified index.
+- **Haiku** ($0.80/$4 per MTok): bulk extraction. Runs on every note, cheap enough to process thousands.
+- **Sonnet** ($3/$15 per MTok): synthesis. Only runs when you ask a question. Higher quality reasoning for connecting dots.
 
-### Layer 3: Entity Graph
-An LLM extracts structured data from each note:
+Embeddings are always free and local. Only entity extraction and `root_ask` use the LLM.
 
-```
-Note: "Ric discussed Heimdall timeline. Sebastian architected the API."
-                           ↓ LLM extraction
-┌─────────────────────────────────────────────────┐
-│ Entities:                                        │
-│   [Ric]        (person)                          │
-│   [Sebastian]  (person)                          │
-│   [Heimdall]   (project)                         │
-│                                                   │
-│ Relations:                                        │
-│   Ric ──discussed──▶ Heimdall     (95%)          │
-│   Sebastian ──created──▶ Heimdall  (90%)          │
-│                                                   │
-│ Context: "Sebastian architected the API"          │
-└─────────────────────────────────────────────────┘
-```
-
-### GraphRAG: The Intelligence Layer
-
-<p align="center">
-  <img src="assets/graphrag-comparison.png" alt="Vector Search vs GraphRAG" width="800">
-</p>
-
-`root_ask` fuses all three layers:
-1. **Semantic search** finds the 5 most relevant chunks
-2. **Entity graph** pulls the neighborhood of mentioned entities
-3. **LLM synthesis** produces a cited, natural language answer
-
-This consistently outperforms pure vector search for multi-hop questions.
+---
 
 ## Quick Start
 
@@ -161,6 +190,19 @@ claude mcp add root -- python server.py
 # root_ask("your question")
 # root_graph("person name", 2)
 ```
+
+## Running Costs
+
+| Activity | Frequency | Cost |
+|----------|-----------|------|
+| Initial vault index (embeddings) | Once | $0 (local model) |
+| Initial entity extraction | Once (~2,500 notes) | ~$3-5 (Haiku) or $0 (Ollama) |
+| Incremental re-index | Every 2 hours | $0 (local) |
+| Incremental extraction | Every 2 hours, only changed notes | ~$0.01-0.05/day |
+| Queries via root_ask | On-demand | ~$0.01/query (Sonnet) |
+| **Monthly estimate** | | **$1-3** |
+
+---
 
 ## 18 MCP Tools
 
@@ -194,6 +236,8 @@ root_ask(question)              Free-form Q&A (GraphRAG)
 root_weekly_digest()            Weekly activity summary
 ```
 
+---
+
 ## Use Cases
 
 ### For Product Managers
@@ -216,24 +260,17 @@ root_weekly_digest()            Weekly activity summary
 - **"Weekly knowledge pulse"** `root_weekly_digest()` summarizes what changed across all sources
 - **"Project health check"** `root_project_pulse("project")` shows activity across notes, meetings, and email
 
+---
+
 ## LLM Backends
 
 Three backends for entity extraction and Q&A synthesis:
 
-```
-┌─────────────┬──────────────────┬─────────┬────────────────────┐
-│ Backend     │ Cost             │ Quality │ Setup              │
-├─────────────┼──────────────────┼─────────┼────────────────────┤
-│ Anthropic   │ ~$3 / 2,500      │ Best    │ ANTHROPIC_API_KEY  │
-│ (default)   │ notes            │         │ in .env            │
-├─────────────┼──────────────────┼─────────┼────────────────────┤
-│ OpenRouter  │ Free $1 credit   │ Good    │ OPENROUTER_API_KEY │
-│             │                  │         │ in .env            │
-├─────────────┼──────────────────┼─────────┼────────────────────┤
-│ Ollama      │ Free (local)     │ Lower   │ ollama pull        │
-│             │                  │         │ llama3.1           │
-└─────────────┴──────────────────┴─────────┴────────────────────┘
-```
+| Backend | Cost | Quality | Setup |
+|---------|------|---------|-------|
+| **Anthropic** (default) | ~$3-5 per 2,500 notes | Best | `ANTHROPIC_API_KEY` in `.env` |
+| **OpenRouter** | Free $1 credit to start | Good | `OPENROUTER_API_KEY` in `.env` |
+| **Ollama** | Free (runs locally) | Lower | `ollama pull llama3.1` |
 
 Set in `config.yaml`:
 ```yaml
@@ -241,7 +278,43 @@ llm:
   backend: "anthropic"  # or "openrouter" or "ollama"
 ```
 
-Embeddings are always free and local. Only entity extraction and `root_ask` use the LLM.
+---
+
+## Auto-Refresh
+
+ROOT supports automatic re-indexing so your knowledge graph stays fresh.
+
+### macOS (recommended: cron)
+
+Cron is recommended over launchd because macOS TCC restrictions prevent launchd agents from accessing `~/Documents` and iCloud paths.
+
+```bash
+# Add to crontab (runs every 2 hours at :30)
+crontab -e
+
+# Add this line:
+30 8,10,12,14,16,18,20,22 * * * ANTHROPIC_API_KEY=your-key-here /path/to/root-kg/.venv/bin/python /path/to/root-kg/indexer.py --extract >> ~/Library/Logs/root-indexer.log 2>> ~/Library/Logs/root-indexer.err
+```
+
+Only changed notes are reprocessed. Typical incremental run: <30 seconds, costing fractions of a cent.
+
+**Pro tip:** If you use Granola for meeting notes with an Obsidian sync, offset ROOT's cron by 30 minutes so fresh meeting content is in the vault when ROOT indexes.
+
+### macOS (alternative: launchd)
+
+A `launchd` plist is included but has limitations with iCloud vault paths due to macOS TCC. If your vault is outside `~/Documents` and iCloud, it works fine:
+
+```bash
+# Edit com.shadman.root-refresh.plist: replace ROOT_DIR with your path
+cp com.shadman.root-refresh.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.shadman.root-refresh.plist
+```
+
+### Linux (systemd timer)
+
+Community contribution welcome. The equivalent would be a systemd timer running `python indexer.py --extract` on a schedule.
+
+---
 
 ## Architecture
 
@@ -255,12 +328,15 @@ root-kg/
 ├── indexer.py           # Vault indexer + extraction orchestrator
 ├── cli.py              # Setup wizard (python -m root init)
 ├── chunker.py          # Markdown-aware note splitter
+├── run-indexer.sh      # Wrapper script for cron/launchd
 ├── tools/
 │   ├── search.py       # Semantic search
 │   ├── patterns.py     # Themes, connections, gaps
 │   ├── correlations.py # About, open loops, pulse
 │   ├── graph.py        # Entity graph, influence map, decision trail
 │   └── intelligence.py # root_ask (GraphRAG), weekly digest
+├── adapters/
+│   └── vault.py        # Obsidian vault scanner
 ├── config.example.yaml # Template config
 ├── .env.example        # Template env
 └── data/root.db        # Everything in one file (gitignored)
@@ -270,8 +346,11 @@ root-kg/
 - **Single file database.** No Postgres, no Neo4j, no Docker. One SQLite file.
 - **Zero new pip deps for LLM.** Uses stdlib `urllib` for API calls. No `anthropic` or `openai` SDK.
 - **Incremental everything.** SHA-256 content hashing for both indexing and extraction. Only changed notes are reprocessed.
+- **Safety guards.** If the vault scan returns 0 results but the DB has existing notes, the indexer aborts instead of purging. Prevents data loss from permission issues or inaccessible paths.
 - **Immutable data patterns.** All functions return new data, never mutate inputs.
 - **Graph on SQLite.** Recursive CTEs for traversal. <10ms at depth 2 with thousands of entities.
+
+---
 
 ## Comparison
 
@@ -286,18 +365,15 @@ root-kg/
 | Single file DB | Yes | N/A | Cloud | Postgres | Cloud |
 | Free embeddings | Yes (local) | N/A | No | Yes | No |
 | Privacy | 100% local | 100% local | Cloud | Hybrid | Cloud |
-| Cost | ~$3 one-time | Free | $20/mo | Free* | $20/mo |
+| Cost | ~$3 one-time + $1-3/mo | Free | $20/mo | Free* | $20/mo |
 
-## Auto-refresh
+---
 
-ROOT includes a macOS `launchd` plist that re-indexes every 2 hours:
+## Requirements
 
-```bash
-cp com.shadman.root-refresh.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.shadman.root-refresh.plist
-```
-
-Only changed notes are reprocessed. Typical incremental run: <30 seconds.
+- Python 3.11+
+- ~500MB disk for embeddings model (downloaded on first run)
+- One of: Anthropic API key (~$5 to start), OpenRouter key (free $1 credit), or Ollama (free, local)
 
 ## Contributing
 
@@ -307,13 +383,7 @@ Areas that would benefit from contributions:
 - **Adapters**: LogSeq, Notion, Apple Notes, Google Docs
 - **Backends**: Google Gemini, local models via llama.cpp
 - **Visualization**: Web UI for entity graph exploration
-- **Platforms**: Linux systemd timer (equivalent to macOS launchd)
-
-## Requirements
-
-- Python 3.11+
-- ~500MB disk for embeddings model (downloaded on first run)
-- One of: Anthropic API key ($5 min), OpenRouter key (free $1), or Ollama
+- **Platforms**: Linux systemd timer, Windows Task Scheduler
 
 ## License
 
