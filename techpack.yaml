@@ -1,0 +1,69 @@
+schemaVersion: 1
+identifier: root-kg
+displayName: ROOT Knowledge Graph
+description: Personal knowledge graph MCP server with entity extraction, GraphRAG, and semantic search over your notes
+author: "Shadman Rahman"
+
+prompts:
+  - key: VAULT_PATH
+    type: input
+    label: "Path to your Obsidian vault (or any folder of markdown files)"
+    default: "~/Documents/My Vault"
+
+  - key: LLM_BACKEND
+    type: select
+    label: "LLM backend for entity extraction and synthesis"
+    options:
+      - value: anthropic
+        label: "Anthropic API (~$3 for full extraction)"
+      - value: openrouter
+        label: "OpenRouter (free $1 credit)"
+      - value: ollama
+        label: "Ollama (free, local, no API key)"
+
+  - key: API_KEY
+    type: input
+    label: "API key (Anthropic or OpenRouter). Leave blank for Ollama."
+    default: ""
+
+components:
+  - id: python
+    description: Python 3.11+ runtime
+    brew: python@3.12
+
+  - id: root-server
+    description: ROOT knowledge graph MCP server
+    dependencies: [python]
+    mcp:
+      command: python
+      args: ["-m", "root_kg"]
+      env:
+        ANTHROPIC_API_KEY: "__API_KEY__"
+      scope: project
+
+  - id: gitignore
+    description: Gitignore entries for ROOT data
+    isRequired: true
+    gitignore:
+      - data/root.db
+      - .env
+      - logs/
+
+templates:
+  - sectionIdentifier: root-instructions
+    contentFile: templates/root-instructions.md
+    placeholders:
+      - __VAULT_PATH__
+
+supplementaryDoctorChecks:
+  - type: commandExists
+    name: Python 3.11+
+    section: Prerequisites
+    command: python3
+    args: ["--version"]
+
+  - type: commandExists
+    name: pip available
+    section: Prerequisites
+    command: pip3
+    args: ["--version"]
