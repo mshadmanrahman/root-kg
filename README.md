@@ -9,8 +9,8 @@
 <h1 align="center">ROOT</h1>
 
 <p align="center">
-  <strong>Personal knowledge graph with entity extraction, GraphRAG, and MCP integration.</strong><br>
-  Turn your scattered notes into searchable intelligence that AI tools can query in real-time.
+  <strong>Ask questions across all your knowledge. Get cited answers.</strong><br>
+  Turn your Obsidian vault, meeting notes, and emails into a queryable intelligence layer.
 </p>
 
 <p align="center">
@@ -18,21 +18,19 @@
 </p>
 
 <p align="center">
-  <a href="#what-root-does">What It Does</a> &bull;
+  <a href="#what-you-can-ask-root">What You Can Ask</a> &bull;
   <a href="#how-it-works">How It Works</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#18-mcp-tools">Tools</a> &bull;
-  <a href="#llm-backends">LLM Backends</a> &bull;
-  <a href="#use-cases">Use Cases</a>
+  <a href="#running-costs">Running Costs</a> &bull;
+  <a href="#comparison">Comparison</a>
 </p>
 
 ---
 
-## What ROOT Does
+You wrote it down. You know you did. It was in a meeting note, or maybe a Slack thread you copied into Obsidian, or that document you made before the planning session. But now you're searching and finding nothing, or finding five things that contradict each other, and you're holding the whole mental model in your head again.
 
-You have knowledge everywhere. Obsidian vault. Meeting transcripts. Email threads. Slack messages. When you need to answer "Who influences this project?" or "How did this decision evolve?", you're manually searching across systems, holding the mental model in your head.
-
-**ROOT fixes this.** It turns your scattered notes, meetings, and emails into an interconnected, queryable intelligence layer. Think of it as a "second brain" that actually understands the relationships between people, projects, decisions, and events across your entire professional life.
+ROOT fixes this. It connects your notes, meetings, and emails into a single queryable layer — one you can ask questions in plain English, the same way you'd ask a colleague who'd read everything you've ever written.
 
 ```
 > root_ask("What decisions were made about FoS Simplification?")
@@ -48,15 +46,26 @@ Marco/Simon (engineering). Sprint start: April 7.
 *Based on 5 search results and 2 entity matches.*
 ```
 
-### The Value
+That answer came from five different notes and two separate meetings. No manual searching. No context-switching. ROOT found the thread, traced the decisions, and told you what happened.
 
-**Ask questions across all your knowledge.** Instead of manually searching through thousands of notes, ask ROOT in plain English. It synthesizes answers with citations from every source.
+---
 
-**See connections you'd never find manually.** ROOT builds an entity graph. It knows that "Sadia" from the kick-off meeting is the same "Sadia Hamid" from the planning session, and that she's connected to "Simon" via an implementation dependency. You can traverse these connections across hundreds of notes.
+## What You Can Ask ROOT
 
-**Meeting intelligence without manual notes.** Your meetings get ingested and entity-extracted. After a week of meetings, ask "What did I commit to this week?" and get an answer that spans all of them.
+ROOT is built for the questions that currently require you to open six tabs and reconstruct things from memory:
 
-### What Makes It Different From Searching Obsidian
+- "What did I commit to Ric last week?"
+- "How did the pricing decision evolve over the last month?"
+- "Who has been working on Project X, and through what?"
+- "What did the team decide about the API design, and did it change?"
+- "What action items from last quarter are still open?"
+- "Brief me on this person before my 1:1 — everything we've discussed."
+
+You ask in plain English. ROOT synthesizes an answer with citations from every source it has indexed.
+
+---
+
+## What Makes It Different From Searching Obsidian
 
 | Obsidian search | ROOT |
 |----------------|------|
@@ -66,6 +75,60 @@ Marco/Simon (engineering). Sprint start: April 7.
 | No cross-source | Combines vault + meetings + emails + Slack |
 | Manual navigation | Traverses relationship graph automatically |
 | One note at a time | Aggregates across hundreds of notes per query |
+
+ROOT knows that "Sadia" from the kick-off meeting is the same "Sadia Hamid" from the planning session. It knows she is connected to "Simon" via an implementation dependency. You can traverse these connections across hundreds of notes without opening a single file.
+
+---
+
+## Quick Start
+
+<p align="center">
+  <img src="assets/terminal.png" alt="ROOT extraction running in terminal" width="700">
+</p>
+
+```bash
+# Clone and setup
+git clone https://github.com/mshadmanrahman/root-kg.git
+cd root-kg
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
+
+# Interactive setup wizard
+python -m root init
+
+# Index your notes (~2 min for 2,500 notes)
+python indexer.py
+
+# Extract entities (~$3 on Anthropic Haiku, or free with Ollama)
+python indexer.py --extract
+
+# Register as MCP server in Claude Code
+claude mcp add root -- python server.py
+
+# Try it
+# root_search("your topic")
+# root_ask("your question")
+# root_graph("person name", 2)
+```
+
+> ROOT connects to Claude Code as an MCP server. New to Claude Code? [claudecodeguide.dev](https://claudecodeguide.dev) gets you set up in under an hour.
+
+---
+
+## Running Costs
+
+This is almost free to run. The initial setup costs a few dollars. After that, daily operation runs in the pennies — because ROOT only reprocesses notes that have actually changed.
+
+| Activity | Frequency | Cost |
+|----------|-----------|------|
+| Initial vault index (embeddings) | Once | $0 (local model) |
+| Initial entity extraction | Once (~2,500 notes) | ~$3-5 (Haiku) or $0 (Ollama) |
+| Incremental re-index | Every 2 hours | $0 (local) |
+| Incremental extraction | Every 2 hours, only changed notes | ~$0.01-0.05/day |
+| Queries via root_ask | On-demand | ~$0.01/query (Sonnet) |
+| **Monthly estimate** | | **$1-3** |
+
+Compare that to Mem.ai ($20/mo) or Rewind ($20/mo) — both cloud-only, both proprietary. ROOT runs locally, costs a latte per month, and your data never leaves your machine unless you choose a cloud LLM for synthesis.
 
 ---
 
@@ -157,50 +220,6 @@ ROOT has a four-step pipeline: ingest, embed, extract, query.
 - **Sonnet** ($3/$15 per MTok): synthesis. Only runs when you ask a question. Higher quality reasoning for connecting dots.
 
 Embeddings are always free and local. Only entity extraction and `root_ask` use the LLM.
-
----
-
-## Quick Start
-
-<p align="center">
-  <img src="assets/terminal.png" alt="ROOT extraction running in terminal" width="700">
-</p>
-
-```bash
-# Clone and setup
-git clone https://github.com/mshadmanrahman/root-kg.git
-cd root-kg
-python -m venv .venv && source .venv/bin/activate
-pip install -e .
-
-# Interactive setup wizard
-python -m root init
-
-# Index your notes (~2 min for 2,500 notes)
-python indexer.py
-
-# Extract entities (~$3 on Anthropic Haiku, or free with Ollama)
-python indexer.py --extract
-
-# Register as MCP server in Claude Code
-claude mcp add root -- python server.py
-
-# Try it
-# root_search("your topic")
-# root_ask("your question")
-# root_graph("person name", 2)
-```
-
-## Running Costs
-
-| Activity | Frequency | Cost |
-|----------|-----------|------|
-| Initial vault index (embeddings) | Once | $0 (local model) |
-| Initial entity extraction | Once (~2,500 notes) | ~$3-5 (Haiku) or $0 (Ollama) |
-| Incremental re-index | Every 2 hours | $0 (local) |
-| Incremental extraction | Every 2 hours, only changed notes | ~$0.01-0.05/day |
-| Queries via root_ask | On-demand | ~$0.01/query (Sonnet) |
-| **Monthly estimate** | | **$1-3** |
 
 ---
 
@@ -388,6 +407,20 @@ Areas that would benefit from contributions:
 ## License
 
 MIT
+
+---
+
+## Part of the PM Toolkit Family
+
+ROOT is one of several tools built for PMs and knowledge workers who want AI that works with their actual context.
+
+**[pm-pilot](https://github.com/mshadmanrahman/pm-pilot)** — Claude Code configured for PMs. Meeting prep, PRDs, market sizing — 25 skills, ready to install.
+
+**[bug-shepherd](https://github.com/mshadmanrahman/bug-shepherd)** — Zero-code bug triage for PMs. Reproduce and sync bugs without reading a line of code.
+
+**[morning-digest](https://github.com/mshadmanrahman/morning-digest)** — Your morning briefed in 30 seconds. Calendar, email, Slack, and action items in one digest.
+
+**[claudecode-guide](https://github.com/mshadmanrahman/claudecode-guide)** — The friendly guide to Claude Code. Zero jargon — from first install to daily operating system. Also at [claudecodeguide.dev](https://claudecodeguide.dev).
 
 ---
 
