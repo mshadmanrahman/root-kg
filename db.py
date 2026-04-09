@@ -2,7 +2,7 @@
 ROOT database layer.
 
 SQLite + sqlite-vec for vector storage.
-Entity graph with recursive CTE traversal.
+Entity graph with BFS traversal.
 Immutable pattern: all functions return new data, never mutate inputs.
 """
 
@@ -442,36 +442,65 @@ class RootDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_entity_neighborhood(self, entity_id: int, depth: int = 2) -> list[dict]:
-        """Traverse the entity graph using recursive CTE. Returns connected entities with depth."""
-        rows = self.conn.execute(
-            """
-            WITH RECURSIVE graph(entity_id, depth, path) AS (
-                SELECT ?, 0, CAST(? AS TEXT)
-                UNION ALL
-                SELECT
-                    CASE WHEN r.entity_a_id = g.entity_id THEN r.entity_b_id ELSE r.entity_a_id END,
-                    g.depth + 1,
-                    g.path || ',' || CASE WHEN r.entity_a_id = g.entity_id
-                        THEN CAST(r.entity_b_id AS TEXT)
-                        ELSE CAST(r.entity_a_id AS TEXT) END
+    def get_entity_neighborhood(
+        self, entity_id: int, depth: int = 2, max_neighbors_per_level: int = 50,
+    ) -> list[dict]:
+        """Traverse the entity graph via BFS. Returns connected entities with depth.
+
+        Uses Python-side BFS with a set for O(1) cycle detection instead of
+        recursive CTE with string-path LIKE matching (which is O(n^depth)
+        on large graphs).
+        """
+        visited: dict[int, int] = {entity_id: 0}  # entity_id -> min_depth
+        frontier: set[int] = {entity_id}
+
+        for current_depth in range(1, depth + 1):
+            if not frontier:
+                break
+            placeholders = ",".join("?" * len(frontier))
+            rows = self.conn.execute(
+                f"""
+                SELECT r.entity_a_id, r.entity_b_id
                 FROM relations r
-                JOIN graph g ON (r.entity_a_id = g.entity_id OR r.entity_b_id = g.entity_id)
-                WHERE g.depth < ?
-                  AND g.path NOT LIKE '%,' || CASE WHEN r.entity_a_id = g.entity_id
-                      THEN CAST(r.entity_b_id AS TEXT)
-                      ELSE CAST(r.entity_a_id AS TEXT) END || '%'
-            )
-            SELECT DISTINCT e.id, e.name, e.entity_type, e.mention_count,
-                   e.first_seen_at, e.last_seen_at, MIN(g.depth) as depth
-            FROM graph g
-            JOIN entities e ON e.id = g.entity_id
-            GROUP BY e.id
-            ORDER BY MIN(g.depth), e.mention_count DESC
+                WHERE r.entity_a_id IN ({placeholders})
+                   OR r.entity_b_id IN ({placeholders})
+                """,
+                (*frontier, *frontier),
+            ).fetchall()
+
+            next_frontier: set[int] = set()
+            for row in rows:
+                for neighbor_id in (row[0], row[1]):
+                    if neighbor_id not in visited:
+                        visited[neighbor_id] = current_depth
+                        next_frontier.add(neighbor_id)
+                        if len(next_frontier) >= max_neighbors_per_level:
+                            break
+                if len(next_frontier) >= max_neighbors_per_level:
+                    break
+            frontier = next_frontier
+
+        if not visited:
+            return []
+
+        placeholders = ",".join("?" * len(visited))
+        entity_rows = self.conn.execute(
+            f"""
+            SELECT id, name, entity_type, mention_count, first_seen_at, last_seen_at
+            FROM entities
+            WHERE id IN ({placeholders})
             """,
-            (entity_id, str(entity_id), depth),
+            tuple(visited.keys()),
         ).fetchall()
-        return [dict(r) for r in rows]
+
+        results = []
+        for row in entity_rows:
+            d = dict(row)
+            d["depth"] = visited[d["id"]]
+            results.append(d)
+
+        results.sort(key=lambda x: (x["depth"], -(x["mention_count"] or 0)))
+        return results
 
     def get_entity_relations(self, entity_id: int) -> list[dict]:
         """Get all direct relations for an entity with full context."""
