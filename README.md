@@ -9,6 +9,10 @@
 <h1 align="center">ROOT</h1>
 
 <p align="center">
+  <a href="https://github.com/mshadmanrahman/root-kg/stargazers"><img src="https://img.shields.io/github/stars/mshadmanrahman/root-kg?style=social" alt="GitHub stars" /></a>
+</p>
+
+<p align="center">
   <strong>Ask questions across all your knowledge. Get cited answers.</strong><br>
   Turn your Obsidian vault, meeting notes, and emails into a queryable intelligence layer.
 </p>
@@ -410,17 +414,18 @@ MIT
 
 ---
 
-## Part of the PM Toolkit Family
+## Support
 
-ROOT is one of several tools built for PMs and knowledge workers who want AI that works with their actual context.
+If this saved you time, give it a star -- it helps others find it and keeps development going.
 
-**[pm-pilot](https://github.com/mshadmanrahman/pm-pilot)** — Claude Code configured for PMs. Meeting prep, PRDs, market sizing — 25 skills, ready to install.
+## See Also
 
-**[bug-shepherd](https://github.com/mshadmanrahman/bug-shepherd)** — Zero-code bug triage for PMs. Reproduce and sync bugs without reading a line of code.
-
-**[morning-digest](https://github.com/mshadmanrahman/morning-digest)** — Your morning briefed in 30 seconds. Calendar, email, Slack, and action items in one digest.
-
-**[claudecode-guide](https://github.com/mshadmanrahman/claudecode-guide)** — The friendly guide to Claude Code. Zero jargon — from first install to daily operating system. Also at [claudecodeguide.dev](https://claudecodeguide.dev).
+- **[pm-pilot](https://github.com/mshadmanrahman/pm-pilot)** -- Claude Code configured for PMs. Meeting prep, PRDs, market sizing -- 25 skills, ready to install.
+- **[morning-digest](https://github.com/mshadmanrahman/morning-digest)** -- Morning briefing automation. Calendar, email, news in one digest.
+- **[discovery-md](https://github.com/mshadmanrahman/discovery-md)** -- AI product discovery for PMs.
+- **[ceremonies](https://github.com/mshadmanrahman/ceremonies)** -- Agile ceremonies that don't suck.
+- **[claudecode-guide](https://github.com/mshadmanrahman/claudecode-guide)** -- Friendly guide to Claude Code. Also at [claudecodeguide.dev](https://claudecodeguide.dev).
+- **[riff](https://github.com/mshadmanrahman/riff)** -- LinkedIn engagement assistant. Extract posts and comments for AI-drafted replies.
 
 ---
 
