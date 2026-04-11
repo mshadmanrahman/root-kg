@@ -34,7 +34,7 @@
 
 You wrote it down. You know you did. It was in a meeting note, or maybe a Slack thread you copied into Obsidian, or that document you made before the planning session. But now you're searching and finding nothing, or finding five things that contradict each other, and you're holding the whole mental model in your head again.
 
-ROOT fixes this. It connects your notes, meetings, and emails into a single queryable layer — one you can ask questions in plain English, the same way you'd ask a colleague who'd read everything you've ever written.
+ROOT fixes this. It connects your notes, meetings, and emails into a single queryable layer  - one you can ask questions in plain English, the same way you'd ask a colleague who'd read everything you've ever written.
 
 ```
 > root_ask("What decisions were made about FoS Simplification?")
@@ -63,7 +63,7 @@ ROOT is built for the questions that currently require you to open six tabs and 
 - "Who has been working on Project X, and through what?"
 - "What did the team decide about the API design, and did it change?"
 - "What action items from last quarter are still open?"
-- "Brief me on this person before my 1:1 — everything we've discussed."
+- "Brief me on this person before my 1:1  - everything we've discussed."
 
 You ask in plain English. ROOT synthesizes an answer with citations from every source it has indexed.
 
@@ -121,7 +121,7 @@ claude mcp add root -- python server.py
 
 ## Running Costs
 
-This is almost free to run. The initial setup costs a few dollars. After that, daily operation runs in the pennies — because ROOT only reprocesses notes that have actually changed.
+This is almost free to run. The initial setup costs a few dollars. After that, daily operation runs in the pennies  - because ROOT only reprocesses notes that have actually changed.
 
 | Activity | Frequency | Cost |
 |----------|-----------|------|
@@ -132,7 +132,7 @@ This is almost free to run. The initial setup costs a few dollars. After that, d
 | Queries via root_ask | On-demand | ~$0.01/query (Sonnet) |
 | **Monthly estimate** | | **$1-3** |
 
-Compare that to Mem.ai ($20/mo) or Rewind ($20/mo) — both cloud-only, both proprietary. ROOT runs locally, costs a latte per month, and your data never leaves your machine unless you choose a cloud LLM for synthesis.
+Compare that to Mem.ai ($20/mo) or Rewind ($20/mo)  - both cloud-only, both proprietary. ROOT runs locally, costs a latte per month, and your data never leaves your machine unless you choose a cloud LLM for synthesis.
 
 ---
 
