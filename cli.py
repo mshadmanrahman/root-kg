@@ -1,12 +1,21 @@
 """
 ROOT CLI.
 
-Setup wizard and management commands for the personal knowledge graph.
+Setup wizard, management commands, and cron-callable search/ingest
+for the personal knowledge graph.
+
+Usage (cron-safe):
+    python cli.py search --query "morning digest signals" [--limit 5]
+    python cli.py note --content "Musa pulse: ..." [--tags "musa,signal"]
+
+Exit codes: 0 = success, 1 = error. Errors go to stderr, results to stdout.
 """
 
+import hashlib
 import os
 import shutil
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -213,11 +222,117 @@ def stats():
     db.close()
 
 
+def _load_config() -> dict:
+    """Load config.yaml. Exits with error if missing."""
+    if not CONFIG_PATH.exists():
+        print("Error: config.yaml not found. Run: python cli.py init", file=sys.stderr)
+        sys.exit(1)
+    with open(CONFIG_PATH) as f:
+        return yaml.safe_load(f)
+
+
+def search(query: str, limit: int = 5) -> None:
+    """Semantic search across ROOT's knowledge graph.
+
+    Prints one result per line: "<rank>. [<folder>] <title> -- <snippet>"
+    Suitable for capturing into a bash variable.
+    """
+    config = _load_config()
+    db_path = PROJECT_ROOT / config["database"]["path"]
+
+    from db import RootDB
+    from embeddings import Embedder
+    from tools.search import semantic_search
+
+    try:
+        db = RootDB(db_path)
+        embedder = Embedder(config["embeddings"]["model"])
+        results = semantic_search(query=query, db=db, embedder=embedder, limit=limit)
+        db.close()
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if not results:
+        # Empty stdout, exit 0 -- caller treats empty output as "no results"
+        return
+
+    for i, r in enumerate(results, 1):
+        snippet = r["snippet"].replace("\n", " ").strip()
+        if len(snippet) > 200:
+            snippet = snippet[:200] + "..."
+        print(f"{i}. [{r['folder']}] {r['title']} -- {snippet}")
+
+
+def note(content: str, tags: list[str] | None = None) -> None:
+    """Ingest a plain-text note into ROOT's index.
+
+    Uses the same chunking + embedding pipeline as root_ingest (server.py).
+    source_type is 'cli' so notes are queryable via root_search without
+    polluting the vault source bucket.
+    """
+    config = _load_config()
+    db_path = PROJECT_ROOT / config["database"]["path"]
+
+    from chunker import chunk_note
+    from db import RootDB
+    from embeddings import Embedder
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Derive a short title from the first non-empty line
+    first_line = next((ln.strip() for ln in content.splitlines() if ln.strip()), "CLI Note")
+    title = first_line[:120]
+
+    # Stable unique path: hash of content + ingest timestamp to avoid collisions
+    # on identical content ingested at different times
+    path_hash = hashlib.sha256((content + now).encode()).hexdigest()[:16]
+    path = f"cli-notes/{path_hash}"
+
+    tag_str = (",".join(tags) + " ") if tags else ""
+    # Prepend tags into body so they're searchable
+    indexed_content = f"{tag_str}{content}" if tag_str else content
+    content_hash = hashlib.sha256(indexed_content.encode("utf-8")).hexdigest()
+    folder = "CLI Notes"
+
+    try:
+        db = RootDB(db_path)
+        embedder = Embedder(config["embeddings"]["model"])
+
+        note_id = db.upsert_note(
+            path=path,
+            title=title,
+            content=indexed_content,
+            content_hash=content_hash,
+            folder=folder,
+            source_type="cli",
+            created_at=now,
+            indexed_at=now,
+        )
+
+        chunks = chunk_note(indexed_content, title)
+        if chunks:
+            texts = [c["text"] for c in chunks]
+            embeddings = embedder.embed_batch(texts)
+            indexed_chunks = [
+                {"idx": c["idx"], "text": c["text"], "embedding": emb}
+                for c, emb in zip(chunks, embeddings)
+            ]
+            db.store_chunks(note_id, indexed_chunks)
+
+        db.close()
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    # Success: silent stdout, exit 0
+
+
 def main():
     """CLI entry point."""
     if len(sys.argv) < 2:
-        print("Usage: python -m root <command>")
-        print("Commands: init, stats, index, extract")
+        print("Usage: python cli.py <command>")
+        print("Commands: init, stats, index, extract, search, note")
         return
 
     command = sys.argv[1]
@@ -234,9 +349,24 @@ def main():
         sys.argv = ["indexer", "--extract-only"] + sys.argv[2:]
         from indexer import main as index_main
         index_main()
+    elif command == "search":
+        import argparse
+        parser = argparse.ArgumentParser(prog="cli.py search")
+        parser.add_argument("--query", required=True, help="Natural language search query")
+        parser.add_argument("--limit", type=int, default=5, help="Max results (default 5)")
+        args = parser.parse_args(sys.argv[2:])
+        search(query=args.query, limit=args.limit)
+    elif command == "note":
+        import argparse
+        parser = argparse.ArgumentParser(prog="cli.py note")
+        parser.add_argument("--content", required=True, help="Plain text note content")
+        parser.add_argument("--tags", default="", help="Comma-separated tags (optional)")
+        args = parser.parse_args(sys.argv[2:])
+        tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else []
+        note(content=args.content, tags=tags)
     else:
         print(f"Unknown command: {command}")
-        print("Commands: init, stats, index, extract")
+        print("Commands: init, stats, index, extract, search, note")
 
 
 if __name__ == "__main__":
