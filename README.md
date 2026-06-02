@@ -37,15 +37,15 @@ You wrote it down. You know you did. It was in a meeting note, or maybe a Slack 
 ROOT fixes this. It connects your notes, meetings, and emails into a single queryable layer  - one you can ask questions in plain English, the same way you'd ask a colleague who'd read everything you've ever written.
 
 ```
-> root_ask("What decisions were made about FoS Simplification?")
+> root_ask("What decisions were made about the Search Redesign?")
 
 # ROOT Answer
 
-Leadership APPROVED the FoS Simplification project on March 17, 2026.
-The FOS list was locked and finalized at the kick-off meeting on March 23.
-Scope: consolidate 1,541 field of studies down to 131 across 16 groups,
-based on Times Higher Education framework. Owner: Sadia Hamid (coordinator),
-Marco/Simon (engineering). Sprint start: April 7.
+Leadership APPROVED the Search Redesign project on March 17, 2026.
+Scope and priorities were locked and finalized at the kick-off meeting on March 23.
+Scope: consolidate 1,200 product categories down to 85 across 12 groups,
+based on the industry taxonomy. Owner: Alex Chen (coordinator),
+Jordan / Sam (engineering). Sprint start: April 7.
 
 *Based on 5 search results and 2 entity matches.*
 ```
@@ -80,7 +80,7 @@ You ask in plain English. ROOT synthesizes an answer with citations from every s
 | Manual navigation | Traverses relationship graph automatically |
 | One note at a time | Aggregates across hundreds of notes per query |
 
-ROOT knows that "Sadia" from the kick-off meeting is the same "Sadia Hamid" from the planning session. It knows she is connected to "Simon" via an implementation dependency. You can traverse these connections across hundreds of notes without opening a single file.
+ROOT knows that "Alex" from the kick-off meeting is the same "Alex Chen" from the planning session. It knows she is connected to "Sam" via an implementation dependency. You can traverse these connections across hundreds of notes without opening a single file.
 
 ---
 
