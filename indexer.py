@@ -6,8 +6,6 @@ Supports incremental indexing via content hashing.
 """
 
 import logging
-import os
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -209,7 +207,7 @@ def main():
     def _llm_paused() -> bool:
         """Check the shared LLM quota guard. Auto-clears if reset_epoch has passed."""
         import time as _time
-        guard = PROJECT_ROOT / ".llm-paused"
+        guard = project_root / ".llm-paused"
         if not guard.exists():
             return False
         try:
