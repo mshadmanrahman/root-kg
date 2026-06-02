@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/hero.png" alt="ROOT - Ask a question, see the graph, get a cited answer" width="800">
+  <img src="assets/hero_canva.png" alt="ROOT - Your notes, indexed and queryable via Claude Code" width="800">
 </p>
 
 <p align="center">
@@ -217,6 +217,10 @@ ROOT has a four-step pipeline: ingest, embed, extract, query.
 │  Cost: ~$0.01 per query                                       │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+<p align="center">
+  <img src="assets/hero.png" alt="ROOT query result - entity graph and cited answer for 'Who influences Mars?'" width="800">
+</p>
 
 ### The Two-Model Strategy
 
