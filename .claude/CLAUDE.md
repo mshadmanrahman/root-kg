@@ -1,12 +1,12 @@
 # ROOT: Personal Knowledge Graph
 
-Semantic intelligence layer across Shadman's knowledge surfaces.
+Semantic intelligence layer for your personal knowledge graph.
 MCP server exposing search, pattern discovery, entity graph, and Q&A to Claude Code.
 
 ## Quick Start
 
 ```bash
-cd _tools/root && source .venv/bin/activate
+cd root-kg && source .venv/bin/activate
 python indexer.py                    # Index/re-index vault
 python indexer.py --extract          # Index + entity extraction
 python indexer.py --extract-only     # Just entity extraction

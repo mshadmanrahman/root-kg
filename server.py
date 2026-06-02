@@ -562,6 +562,23 @@ def _format_gaps(gaps: list[dict], topic: str) -> str:
 
 
 async def main():
+    import logging
+    logging.basicConfig(
+        format="%(asctime)s [ROOT-MCP] %(levelname)s %(message)s",
+        level=logging.INFO,
+        stream=sys.stderr,
+    )
+    logger = logging.getLogger("root.mcp")
+
+    # Pre-warm DB and embedder so first tool call doesn't block the event loop
+    try:
+        logger.info("pre-warming DB and embedder...")
+        get_db()
+        get_embedder()
+        logger.info("pre-warm complete")
+    except Exception as e:
+        logger.error("pre-warm failed: %s (tools may still work with lazy load)", e)
+
     async with stdio_server() as (read_stream, write_stream):
         await app.run(read_stream, write_stream, app.create_initialization_options())
 

@@ -34,6 +34,8 @@ class RootDB:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(self.db_path))
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.enable_load_extension(True)
         sqlite_vec.load(self.conn)
         self.conn.enable_load_extension(False)
@@ -289,6 +291,13 @@ class RootDB:
             "by_source": {r["source_type"]: r["cnt"] for r in source_counts},
             "top_folders": {r["folder"]: r["cnt"] for r in folder_counts},
         }
+
+    def count_notes_by_source(self, source_type: str) -> int:
+        """Count notes of a given source type."""
+        row = self.conn.execute(
+            "SELECT COUNT(*) FROM notes WHERE source_type = ?", (source_type,)
+        ).fetchone()
+        return row[0] if row else 0
 
     def remove_stale_notes(self, valid_paths: set[str]) -> int:
         """Remove notes whose paths no longer exist. Returns count removed."""

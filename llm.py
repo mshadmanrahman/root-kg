@@ -8,10 +8,25 @@ Fallback: OpenRouter (free $1 credit).
 
 import json
 import os
+import subprocess
 from pathlib import Path
 from typing import Optional
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+
+# Env vars that must be stripped when invoking `claude` as a subprocess
+# from the claude_cli backend:
+#  - CLAUDECODE / CLAUDE_CODE_ENTRYPOINT / CLAUDE_CODE_EXECPATH: otherwise the
+#    nested CLI says "Not logged in" (per Apr 24 memory).
+#  - ANTHROPIC_API_KEY: otherwise the CLI uses API billing instead of the
+#    Claude.ai subscription OAuth — defeating the entire point of this backend.
+#    ROOT's .env file sets ANTHROPIC_API_KEY into os.environ at import time.
+_NESTED_CLAUDE_ENV_STRIP = (
+    "CLAUDECODE",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_EXECPATH",
+    "ANTHROPIC_API_KEY",
+)
 
 # Load .env file if present (no dependency on python-dotenv)
 _env_path = Path(__file__).parent / ".env"
@@ -117,6 +132,7 @@ class LLMClient:
     - "anthropic": Direct Anthropic API (ANTHROPIC_API_KEY)
     - "openrouter": OpenRouter API (OPENROUTER_API_KEY)
     - "ollama": Local LLM via Ollama (free, no key needed)
+    - "claude_cli": Subprocess to `claude --print` (uses Claude.ai subscription quota, no key)
     """
 
     def __init__(
@@ -142,8 +158,16 @@ class LLMClient:
             self.base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434") + "/api/chat"
             self.extraction_model = extraction_model or "llama3.1"
             self.synthesis_model = synthesis_model or "llama3.1"
+        elif backend == "claude_cli":
+            self.api_key = ""
+            self.base_url = ""
+            # Short names (haiku/sonnet/opus) or full model IDs both accepted by `claude --model`
+            self.extraction_model = extraction_model or "haiku"
+            self.synthesis_model = synthesis_model or "sonnet"
         else:
-            raise ValueError(f"Unknown backend: {backend}. Use 'anthropic', 'openrouter', or 'ollama'.")
+            raise ValueError(
+                f"Unknown backend: {backend}. Use 'anthropic', 'openrouter', 'ollama', or 'claude_cli'."
+            )
 
         if backend in ("anthropic", "openrouter") and not self.api_key:
             key_name = "ANTHROPIC_API_KEY" if backend == "anthropic" else "OPENROUTER_API_KEY"
@@ -163,6 +187,8 @@ class LLMClient:
             return self._extract_anthropic(user_msg)
         elif self.backend == "ollama":
             return self._extract_ollama(user_msg)
+        elif self.backend == "claude_cli":
+            return self._extract_claude_cli(user_msg)
         return self._extract_openrouter(user_msg)
 
     def synthesize(self, question: str, context: str) -> str:
@@ -171,6 +197,8 @@ class LLMClient:
             return self._synthesize_anthropic(question, context)
         elif self.backend == "ollama":
             return self._synthesize_ollama(question, context)
+        elif self.backend == "claude_cli":
+            return self._synthesize_claude_cli(question, context)
         return self._synthesize_openrouter(question, context)
 
     # ── Anthropic backend ────────────────────────────────────────
@@ -324,3 +352,136 @@ Return ONLY valid JSON in this exact format:
             return response.get("message", {}).get("content", "No response generated.")
         except RuntimeError as e:
             return f"Ollama error: {e}. Is Ollama running? (ollama serve)"
+
+    # ── Claude CLI backend (subscription quota, no API key) ──────
+
+    def _run_claude_cli(
+        self,
+        prompt: str,
+        model: str,
+        system_prompt: str,
+        timeout: int = 120,
+    ) -> str:
+        """Invoke `claude --print` as a subprocess. Returns stdout text.
+
+        Strips nested-Claude env vars (per Apr 24 memory) and pipes prompt via
+        stdin so large payloads don't hit argv size limits.
+        """
+        env = {k: v for k, v in os.environ.items() if k not in _NESTED_CLAUDE_ENV_STRIP}
+
+        # NOTE: --bare disables OAuth/keychain auth (forces ANTHROPIC_API_KEY only),
+        # so we do NOT use it here. We want the Claude.ai subscription quota instead
+        # of API billing. Tradeoff: SessionEnd hooks may fire per subprocess call and
+        # print noise to stderr (harmless; stdout remains the model's response).
+        cmd = [
+            "claude",
+            "--print",
+            "--no-session-persistence",
+            "--model",
+            model,
+            "--append-system-prompt",
+            system_prompt,
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                input=prompt,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(f"claude CLI timed out after {timeout}s") from e
+        except FileNotFoundError as e:
+            raise RuntimeError("`claude` CLI not found on PATH") from e
+
+        stdout = (result.stdout or "").strip()
+        stderr = (result.stderr or "").strip()
+
+        # claude CLI can exit non-zero even when the model responded successfully,
+        # e.g. when a SessionEnd hook fails post-response. Treat stdout as authoritative:
+        # if we have stdout, return it. Only raise if stdout is empty AND exit is non-zero.
+        if stdout:
+            return stdout
+        if result.returncode != 0:
+            raise RuntimeError(f"claude CLI exit {result.returncode}: {stderr[:500]}")
+        return ""
+
+    def _extract_claude_cli(self, user_msg: str) -> dict:
+        """Extraction via `claude --print`. Uses JSON-mode prompting like Ollama."""
+        json_schema = json.dumps(
+            {
+                "entities": [
+                    {
+                        "name": "string",
+                        "type": "person|project|decision|event|concept|organization",
+                        "aliases": ["string"],
+                    }
+                ],
+                "relations": [
+                    {
+                        "from_entity": "string",
+                        "relation": "works_with|owns|decided|discussed|attended|blocked_by|depends_on|manages|created|reviewed",
+                        "to_entity": "string",
+                        "confidence": 0.9,
+                        "context": "string",
+                    }
+                ],
+            },
+            indent=2,
+        )
+
+        prompt = (
+            f"{EXTRACTION_SYSTEM}\n\n"
+            f"Return ONLY valid JSON matching this exact shape, with no prose, no code fences, no commentary:\n"
+            f"{json_schema}\n\n"
+            f"{user_msg}"
+        )
+
+        try:
+            raw = self._run_claude_cli(
+                prompt=prompt,
+                model=self.extraction_model,
+                system_prompt=EXTRACTION_SYSTEM,
+                timeout=60,
+            )
+        except RuntimeError:
+            return {"entities": [], "relations": []}
+
+        # Tolerate stray code fences or leading/trailing prose
+        text = raw.strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.lower().startswith("json"):
+                text = text[4:].lstrip()
+            if text.endswith("```"):
+                text = text[:-3]
+        # Extract first JSON object if prose leaked
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            text = text[start : end + 1]
+
+        try:
+            result = json.loads(text)
+            if "entities" in result and "relations" in result:
+                return result
+        except json.JSONDecodeError:
+            pass
+
+        return {"entities": [], "relations": []}
+
+    def _synthesize_claude_cli(self, question: str, context: str) -> str:
+        """Synthesis via `claude --print`. Plain text in, plain text out."""
+        prompt = f"Context from knowledge graph:\n\n{context}\n\n---\n\nQuestion: {question}"
+        try:
+            return self._run_claude_cli(
+                prompt=prompt,
+                model=self.synthesis_model,
+                system_prompt=SYNTHESIS_SYSTEM,
+                timeout=180,
+            )
+        except RuntimeError as e:
+            return f"claude CLI error: {e}"

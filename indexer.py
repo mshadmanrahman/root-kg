@@ -6,6 +6,7 @@ Supports incremental indexing via content hashing.
 """
 
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -70,6 +71,18 @@ def index_vault(config: dict, db: RootDB, embedder: Embedder, logger: logging.Lo
             stats["updated"] += 1
 
         notes_to_embed.append({**note, "indexed_at": now})
+
+    # Safety guard: if scan returned 0 results but DB has vault notes, abort
+    # This prevents accidental purge when vault path is inaccessible
+    if stats["scanned"] == 0:
+        existing_vault_count = db.count_notes_by_source("vault")
+        if existing_vault_count > 0:
+            logger.error(
+                f"SAFETY ABORT: Vault scan returned 0 notes but DB has {existing_vault_count} vault notes. "
+                f"Vault path may be inaccessible. Skipping stale removal to prevent data loss."
+            )
+            stats["stale_removed"] = 0
+            return stats
 
     # Remove notes that no longer exist in vault
     stats["stale_removed"] = db.remove_stale_notes(all_paths)
@@ -193,6 +206,23 @@ def main():
     db_path = project_root / config["database"]["path"]
     db = RootDB(db_path)
 
+    def _llm_paused() -> bool:
+        """Check the shared LLM quota guard. Auto-clears if reset_epoch has passed."""
+        import time as _time
+        guard = PROJECT_ROOT / ".llm-paused"
+        if not guard.exists():
+            return False
+        try:
+            for line in guard.read_text().splitlines():
+                if line.startswith("reset_epoch:"):
+                    epoch = int(line.split(":", 1)[1].strip())
+                    if _time.time() >= epoch:
+                        guard.unlink(missing_ok=True)
+                        return False
+        except Exception:
+            pass
+        return True
+
     try:
         if not args.extract_only:
             embedder = Embedder(config["embeddings"]["model"])
@@ -202,13 +232,16 @@ def main():
             logger.info(f"Index total: {db_stats['total_notes']} notes, {db_stats['total_chunks']} chunks")
 
         if args.extract or args.extract_only:
-            logger.info("Starting entity extraction...")
-            run_extraction(config, db, logger, limit=args.limit)
-            entity_stats = db.get_entity_stats()
-            logger.info(
-                f"Graph total: {entity_stats['total_entities']} entities, "
-                f"{entity_stats['total_relations']} relations"
-            )
+            if _llm_paused():
+                logger.info("SKIP: entity extraction paused by LLM quota guard.")
+            else:
+                logger.info("Starting entity extraction...")
+                run_extraction(config, db, logger, limit=args.limit)
+                entity_stats = db.get_entity_stats()
+                logger.info(
+                    f"Graph total: {entity_stats['total_entities']} entities, "
+                    f"{entity_stats['total_relations']} relations"
+                )
     finally:
         db.close()
 
