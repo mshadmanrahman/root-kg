@@ -59,6 +59,11 @@ def _is_low_quality_alias(alias: str, entity_name: str) -> bool:
     # other (e.g. "acmecorp" / "app.acme.io" vs "Acme").
     if (alias_tokens & name_tokens) or norm in name_norm or name_norm in norm:
         return False
+    # Non-ASCII aliases are localized names or transliterations (e.g. a CJK
+    # spelling of the entity). They are specific, not generic English magnets,
+    # so keep them: the magnet risk is common English phrases, not foreign names.
+    if any(ord(c) > 127 for c in alias):
+        return False
     # No overlap with the name. Keep only tight identifiers (single-token
     # acronyms or handles); reject multi-word English descriptions.
     is_identifier = len(norm.split()) == 1 and (
