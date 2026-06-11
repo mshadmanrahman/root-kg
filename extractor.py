@@ -6,12 +6,65 @@ Uses LLM (Anthropic Haiku) for accurate extraction from personal knowledge.
 """
 
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Optional
 
 from db import RootDB
 from llm import LLMClient
+
+
+# Generic phrases the extraction LLM sometimes emits as "aliases" but which are
+# descriptions, not names. Accepting them is how an entity becomes a magnet
+# super-node: resolve_entity() routes future mentions by alias, so a generic
+# alias silently re-attaches every unrelated mention onto one entity. Observed
+# in practice: one project entity absorbed generic phrases like "system", "the
+# product", and "control plane" and ballooned into the largest node in the graph.
+# These never pass.
+_GENERIC_ALIAS_STOPWORDS = frozenset({
+    "system", "the system", "platform", "the platform", "the product",
+    "operating system", "operating layer", "control plane", "command plane",
+    "command and control plane", "nervous system", "agent runtime system",
+    "agent runtime", "agent execution runtime", "task management system",
+    "issue tracking system", "activity log", "mutation recording system",
+    "memory service", "runtime", "orchestrator", "backend", "frontend",
+    "api", "ui", "cli", "sdk", "os", "ceo", "cto", "app", "the app",
+    "the tool", "the service", "the repo", "the codebase", "the project",
+    "the company",
+})
+_ALIAS_TOKEN_RE = re.compile(r"[a-z0-9]+")
+_ALIAS_STOP_TOKENS = frozenset({"the", "a", "an", "of", "for", "and", "ai", "to", "in", "on"})
+
+
+def _is_low_quality_alias(alias: str, entity_name: str) -> bool:
+    """True if `alias` is too generic to be a safe alias for `entity_name`.
+
+    Aliases drive resolve_entity(), so a generic phrase accepted as an alias
+    re-routes unrelated mentions onto one entity (magnet super-node). We reject
+    curated generics, leading-article descriptors, and (when the alias shares no
+    real token with the canonical name) anything that is not a tight identifier
+    (acronym or handle). Real name variants keep a shared token, a substring of
+    the name, or an acronym/handle shape; English descriptions do not.
+    """
+    norm = alias.strip().lower()
+    if not norm or norm in _GENERIC_ALIAS_STOPWORDS:
+        return True
+    if norm.split()[0] in {"the", "a", "an"}:
+        return True
+    name_norm = entity_name.lower()
+    alias_tokens = {t for t in _ALIAS_TOKEN_RE.findall(norm) if t not in _ALIAS_STOP_TOKENS}
+    name_tokens = {t for t in _ALIAS_TOKEN_RE.findall(name_norm) if t not in _ALIAS_STOP_TOKENS}
+    # Genuine variant: shares a real token, or one name is a substring of the
+    # other (e.g. "acmecorp" / "app.acme.io" vs "Acme").
+    if (alias_tokens & name_tokens) or norm in name_norm or name_norm in norm:
+        return False
+    # No overlap with the name. Keep only tight identifiers (single-token
+    # acronyms or handles); reject multi-word English descriptions.
+    is_identifier = len(norm.split()) == 1 and (
+        alias.strip().isupper() or any(c in alias for c in "@/")
+    )
+    return not is_identifier
 
 
 @dataclass(frozen=True)
@@ -133,7 +186,7 @@ def _extract_note(
 
         for alias in ent.get("aliases", []):
             alias = alias.strip()
-            if alias and alias != ent_name:
+            if alias and alias != ent_name and not _is_low_quality_alias(alias, ent_name):
                 db.add_alias(eid, alias)
 
     # Store relations
