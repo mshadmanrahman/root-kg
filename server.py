@@ -6,7 +6,9 @@ entity graph traversal, and intelligence tools
 to Claude Code via the Model Context Protocol.
 """
 
+import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -293,8 +295,32 @@ async def list_tools() -> list[Tool]:
     ]
 
 
+_USAGE_LOG = Path(__file__).resolve().parent.parent / "agent-state" / ".cost" / "root_mcp_usage.jsonl"
+
+
+def _log_usage(name: str, arguments: dict) -> None:
+    """Append a one-line usage record per MCP tool call. Best-effort: never let
+    logging break a tool. Agents query ROOT over the HTTP endpoint (rootd.log), so
+    THIS file isolates interactive (Claude Code) usage -- the signal for whether
+    the ask/graph layer earns its maintenance cost. Stores only a short query
+    snippet, no full content."""
+    try:
+        rec = {
+            "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "tool": name,
+            "q": str(arguments.get("query") or arguments.get("entity")
+                     or arguments.get("question") or "")[:80],
+        }
+        _USAGE_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with open(_USAGE_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+    except Exception:
+        pass
+
+
 @app.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    _log_usage(name, arguments)
     db = get_db()
     embedder = get_embedder()
 
