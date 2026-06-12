@@ -186,7 +186,10 @@ def _extract_note(
             first_seen=note.get("created_at"),
             last_seen=note.get("indexed_at"),
         )
-        entity_ids[ent_name] = eid
+        # Key by casefold so a relation endpoint the LLM emitted in a different
+        # casing ("Acme" vs "acme") still matches within this note instead of
+        # falling through to a cross-note resolve.
+        entity_ids[ent_name.casefold()] = eid
         db.link_entity_to_note(eid, note_id)
 
         for alias in ent.get("aliases", []):

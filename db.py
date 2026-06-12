@@ -372,15 +372,44 @@ class RootDB:
         except sqlite3.IntegrityError:
             pass
 
-    def resolve_entity(self, name: str) -> Optional[int]:
-        """Look up entity by name or alias. Returns entity ID or None."""
+    def resolve_entity(self, name: str, entity_type: Optional[str] = None) -> Optional[int]:
+        """Look up entity by name or alias. Returns entity ID or None.
+
+        When several entities share a case-insensitive name, resolution is
+        DETERMINISTIC instead of returning whichever row the scan hits first.
+        The graph can accumulate several same-name shards (e.g. "Acme"/"ACME"/
+        "acme") that together own most of an entity's relations; the old
+        unordered ``.fetchone()`` often landed on a 1-mention orphan shard, so a
+        neighborhood query saw a near-empty result. Ranking:
+          1. exact entity_type match first (when the caller knows the type),
+          2. most-connected shard (relation count desc),
+          3. most-mentioned, then lowest id (stable final tie-break).
+        relation count, NOT mention_count, is the primary signal: mention_count
+        is inflated by re-extraction (upsert increments it every run), so it is
+        an unreliable "which row is the real one" measure. When entity_type is
+        None the type term is uniformly NULL and drops out of the ordering, so
+        untyped callers still get the most-connected shard deterministically.
+        """
+        order = """
+            ORDER BY
+                (e.entity_type = ?) DESC,
+                (SELECT COUNT(*) FROM relations r
+                    WHERE r.entity_a_id = e.id OR r.entity_b_id = e.id) DESC,
+                e.mention_count DESC,
+                e.id ASC
+            LIMIT 1
+        """
         row = self.conn.execute(
-            "SELECT id FROM entities WHERE LOWER(name) = LOWER(?)", (name,)
+            "SELECT e.id FROM entities e WHERE e.name = ? COLLATE NOCASE" + order,
+            (name, entity_type),
         ).fetchone()
         if row:
             return row["id"]
         row = self.conn.execute(
-            "SELECT entity_id FROM entity_aliases WHERE LOWER(alias) = LOWER(?)", (name,)
+            "SELECT e.id AS entity_id FROM entity_aliases ea "
+            "JOIN entities e ON e.id = ea.entity_id "
+            "WHERE ea.alias = ? COLLATE NOCASE" + order,
+            (name, entity_type),
         ).fetchone()
         return row["entity_id"] if row else None
 

@@ -92,6 +92,68 @@ class TestAliases:
         db.add_alias(eid, "Rick")  # Should not raise
 
 
+class TestResolveDeterminism:
+    """Split-name resolution is deterministic.
+
+    Several entities can share a case-insensitive name: UNIQUE(name, entity_type)
+    is case-sensitive on writes, so "Acme"/"acme" coexist, while reads are
+    case-insensitive. resolve_entity must pick the most-connected shard (and
+    prefer an exact entity_type when given) instead of returning whichever row
+    the scan happens to hit first.
+    """
+
+    @staticmethod
+    def _add_relations(db, entity_id, note_id, n):
+        """Attach n relations to entity_id via n filler partner entities."""
+        for i in range(n):
+            partner = db.upsert_entity(f"Filler{entity_id}_{i}", "concept")
+            db.upsert_relation(entity_id, "discussed", partner, note_id)
+
+    def test_prefers_most_connected_shard(self, db_with_notes):
+        db = db_with_notes
+        note = db.conn.execute("SELECT id FROM notes LIMIT 1").fetchone()["id"]
+        db.upsert_entity("Acme", "project")        # near-empty orphan shard
+        big = db.upsert_entity("acme", "project")  # the real cluster
+        self._add_relations(db, big, note, 5)
+        # queried in any casing, the connected shard wins
+        assert db.resolve_entity("acme") == big
+        assert db.resolve_entity("ACME") == big
+        assert db.resolve_entity("Acme") == big
+
+    def test_type_aware_prefers_exact_type(self, db_with_notes):
+        db = db_with_notes
+        note = db.conn.execute("SELECT id FROM notes LIMIT 1").fetchone()["id"]
+        proj = db.upsert_entity("Globex", "project")
+        org = db.upsert_entity("Globex", "organization")
+        # project is MORE connected, so without the hint it would win
+        self._add_relations(db, proj, note, 4)
+        self._add_relations(db, org, note, 1)
+        assert db.resolve_entity("Globex", entity_type="organization") == org
+        assert db.resolve_entity("Globex", entity_type="project") == proj
+        # untyped falls back to the most-connected shard
+        assert db.resolve_entity("Globex") == proj
+
+    def test_untyped_resolution_is_stable(self, db_with_notes):
+        db = db_with_notes
+        note = db.conn.execute("SELECT id FROM notes LIMIT 1").fetchone()["id"]
+        db.upsert_entity("Initech Co", "project")
+        b = db.upsert_entity("Initech co", "project")
+        self._add_relations(db, b, note, 3)
+        first = db.resolve_entity("initech co")
+        assert first == b
+        assert db.resolve_entity("initech co") == first  # repeatable
+
+    def test_alias_path_still_resolves(self, db_with_notes):
+        # Regression guard for the alias-query JOIN rewrite.
+        db = db_with_notes
+        note = db.conn.execute("SELECT id FROM notes LIMIT 1").fetchone()["id"]
+        strong = db.upsert_entity("Hooli", "project")
+        self._add_relations(db, strong, note, 3)
+        db.add_alias(strong, "HL")
+        assert db.resolve_entity("HL") == strong
+        assert db.resolve_entity("hl") == strong  # case-insensitive alias
+
+
 class TestRelations:
     def test_create_relation(self, db_with_notes):
         ric = db_with_notes.upsert_entity("Ric", "person")

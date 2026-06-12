@@ -5,11 +5,14 @@ Entity neighborhood traversal, influence maps, decision trails,
 and blind spot detection using recursive CTE graph queries on SQLite.
 """
 
-from typing import Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
 
 from db import RootDB
-from embeddings import Embedder
-from tools.search import semantic_search
+
+if TYPE_CHECKING:
+    from embeddings import Embedder
 
 
 def entity_graph(
@@ -77,7 +80,7 @@ def influence_map(
     Finds the project entity, pulls all relations, and groups
     by person + relation type to show stakeholder influence.
     """
-    entity_id = db.resolve_entity(project_name)
+    entity_id = db.resolve_entity(project_name, entity_type="project")
     if entity_id is None:
         matches = db.search_entities(project_name, entity_type="project")
         if not matches:
@@ -147,6 +150,7 @@ def influence_map(
 
 def _influence_from_search(project_name: str, db: RootDB, embedder: Embedder) -> str:
     """Fallback: build influence from semantic search when no graph entity exists."""
+    from tools.search import semantic_search
     results = semantic_search(f"{project_name} team stakeholders", db, embedder, limit=10)
     if not results:
         return f"No information found about '{project_name}' in the knowledge graph."
@@ -173,6 +177,7 @@ def decision_trail(
     decision_entities = db.search_entities(topic, entity_type="decision")
 
     # Also search semantically for decision-related content
+    from tools.search import semantic_search
     search_results = semantic_search(
         f"{topic} decision decided agreed strategy",
         db, embedder, limit=10,
