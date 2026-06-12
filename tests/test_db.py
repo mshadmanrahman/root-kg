@@ -279,6 +279,50 @@ class TestMergeEntities:
         resolved = db_with_notes.resolve_entity("Sebastian Wallmark")
         assert resolved == seb
 
+    def test_merge_shared_note_link_no_pk_crash(self, db_with_notes):
+        # Both entities linked to the SAME note: the naive UPDATE hit the
+        # (entity_id, note_id) PK. Safe merge must collapse, not raise.
+        keep = db_with_notes.upsert_entity("Sebastian", "person")
+        loser = db_with_notes.upsert_entity("Sebastian Wallmark", "person")
+        note = db_with_notes.conn.execute("SELECT id FROM notes LIMIT 1").fetchone()["id"]
+        db_with_notes.link_entity_to_note(keep, note)
+        db_with_notes.link_entity_to_note(loser, note)
+        db_with_notes.merge_entities(keep_id=keep, merge_id=loser)
+        links = db_with_notes.conn.execute(
+            "SELECT COUNT(*) FROM entity_note_links WHERE entity_id=?", (keep,)).fetchone()[0]
+        assert links == 1
+        assert db_with_notes.conn.execute(
+            "SELECT COUNT(*) FROM entity_note_links WHERE entity_id=?", (loser,)).fetchone()[0] == 0
+
+    def test_merge_shared_alias_no_unique_crash(self, db_with_notes):
+        # Both entities own the SAME alias: the naive UPDATE hit UNIQUE(alias).
+        keep = db_with_notes.upsert_entity("Sebastian", "person")
+        loser = db_with_notes.upsert_entity("Sebastian Wallmark", "person")
+        db_with_notes.add_alias(keep, "Sebbe")
+        db_with_notes.add_alias(loser, "Sebbe")  # add_alias swallows the dup
+        db_with_notes.merge_entities(keep_id=keep, merge_id=loser)
+        assert db_with_notes.resolve_entity("Sebbe") == keep
+        assert db_with_notes.conn.execute(
+            "SELECT COUNT(*) FROM entities WHERE id=?", (loser,)).fetchone()[0] == 0
+
+    def test_merge_drops_self_loops(self, db_with_notes):
+        # A relation BETWEEN the merged pair must not survive as a self-loop.
+        keep = db_with_notes.upsert_entity("Sebastian", "person")
+        loser = db_with_notes.upsert_entity("Sebastian Wallmark", "person")
+        note = db_with_notes.conn.execute("SELECT id FROM notes LIMIT 1").fetchone()["id"]
+        db_with_notes.upsert_relation(keep, "works_with", loser, note)
+        db_with_notes.merge_entities(keep_id=keep, merge_id=loser)
+        loops = db_with_notes.conn.execute(
+            "SELECT COUNT(*) FROM relations WHERE entity_a_id=entity_b_id").fetchone()[0]
+        assert loops == 0
+
+    def test_merge_noop_on_same_or_missing(self, db_with_notes):
+        keep = db_with_notes.upsert_entity("Sebastian", "person")
+        db_with_notes.merge_entities(keep_id=keep, merge_id=keep)      # same id
+        db_with_notes.merge_entities(keep_id=keep, merge_id=999999)    # missing
+        assert db_with_notes.conn.execute(
+            "SELECT COUNT(*) FROM entities WHERE id=?", (keep,)).fetchone()[0] == 1
+
 
 class TestEntityStats:
     def test_empty_stats(self, db):

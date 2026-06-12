@@ -640,40 +640,54 @@ class RootDB:
         return [dict(r) for r in rows]
 
     def merge_entities(self, keep_id: int, merge_id: int) -> None:
-        """Merge one entity into another. Reassigns all relations and aliases."""
-        self.conn.execute(
-            "UPDATE relations SET entity_a_id = ? WHERE entity_a_id = ?",
-            (keep_id, merge_id),
-        )
-        self.conn.execute(
-            "UPDATE relations SET entity_b_id = ? WHERE entity_b_id = ?",
-            (keep_id, merge_id),
-        )
-        self.conn.execute(
-            "UPDATE entity_note_links SET entity_id = ? WHERE entity_id = ?",
-            (keep_id, merge_id),
-        )
-        self.conn.execute(
-            "UPDATE entity_aliases SET entity_id = ? WHERE entity_id = ?",
-            (keep_id, merge_id),
-        )
-        # Add the merged entity's name as an alias
+        """Safely merge merge_id into keep_id, atomically.
+
+        The naive version (UPDATE ... SET entity_id=keep) violated two constraints
+        whenever the pair shared a note or an alias: the entity_note_links
+        (entity_id, note_id) primary key and the entity_aliases UNIQUE(alias). It
+        also left self-loop relations (a->a) behind and was not transactional, so a
+        mid-way failure corrupted the graph. This version moves note-links and
+        aliases with INSERT OR IGNORE (collisions collapse instead of raising),
+        sweeps self-loops, sums mention_count NULL-safely, and runs in one
+        transaction that rolls back on any error. No-ops if the ids are equal or
+        either row is missing, so it is safe to call from a merge loop.
+        """
+        if keep_id == merge_id:
+            return
+        keep = self.conn.execute("SELECT name FROM entities WHERE id=?", (keep_id,)).fetchone()
         merged = self.conn.execute(
-            "SELECT name FROM entities WHERE id = ?", (merge_id,)
+            "SELECT name, mention_count FROM entities WHERE id=?", (merge_id,)
         ).fetchone()
-        if merged:
-            self.add_alias(keep_id, merged["name"])
-        # Sum mention counts
-        self.conn.execute(
-            """
-            UPDATE entities SET mention_count = mention_count + (
-                SELECT mention_count FROM entities WHERE id = ?
-            ) WHERE id = ?
-            """,
-            (merge_id, keep_id),
-        )
-        self.conn.execute("DELETE FROM entities WHERE id = ?", (merge_id,))
-        self.conn.commit()
+        if keep is None or merged is None:
+            return
+        try:
+            self.conn.execute("UPDATE relations SET entity_a_id=? WHERE entity_a_id=?", (keep_id, merge_id))
+            self.conn.execute("UPDATE relations SET entity_b_id=? WHERE entity_b_id=?", (keep_id, merge_id))
+            # self-loops created by collapsing the pair
+            self.conn.execute("DELETE FROM relations WHERE entity_a_id=entity_b_id AND entity_a_id=?", (keep_id,))
+            # note-links: INSERT OR IGNORE dodges the (entity_id, note_id) PK collision
+            self.conn.execute(
+                "INSERT OR IGNORE INTO entity_note_links(entity_id, note_id) "
+                "SELECT ?, note_id FROM entity_note_links WHERE entity_id=?", (keep_id, merge_id))
+            self.conn.execute("DELETE FROM entity_note_links WHERE entity_id=?", (merge_id,))
+            # aliases: INSERT OR IGNORE dodges the UNIQUE(alias) collision
+            self.conn.execute(
+                "INSERT OR IGNORE INTO entity_aliases(entity_id, alias) "
+                "SELECT ?, alias FROM entity_aliases WHERE entity_id=?", (keep_id, merge_id))
+            self.conn.execute("DELETE FROM entity_aliases WHERE entity_id=?", (merge_id,))
+            # keep the merged name as an alias of the survivor (if distinct, not taken)
+            if merged["name"] and merged["name"].lower() != (keep["name"] or "").lower():
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO entity_aliases(entity_id, alias) VALUES(?, ?)",
+                    (keep_id, merged["name"]))
+            self.conn.execute(
+                "UPDATE entities SET mention_count = COALESCE(mention_count,0)+? WHERE id=?",
+                (merged["mention_count"] or 0, keep_id))
+            self.conn.execute("DELETE FROM entities WHERE id=?", (merge_id,))
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def get_entity_stats(self) -> dict:
         """Get entity graph statistics."""
