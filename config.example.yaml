@@ -23,6 +23,12 @@ database:
 indexer:
   log_dir: "logs"
   batch_size: 64
+  # Skip notes with less prose than this, measured after stripping frontmatter,
+  # headings, embeds and links. Navigation-only notes (a title plus a file embed
+  # plus prev/next links) embed as near-identical tag soup and crowd out real
+  # answers for any query in the same vocabulary. Set 0 to index everything.
+  # Preview before changing: python indexer.py --report-thin --min-prose N
+  min_prose_chars: 30
 
 llm:
   # Backend options:

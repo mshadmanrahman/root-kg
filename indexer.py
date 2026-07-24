@@ -6,6 +6,7 @@ Supports incremental indexing via content hashing.
 """
 
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,6 +16,43 @@ from adapters.vault import scan_vault
 from chunker import chunk_note
 from db import RootDB
 from embeddings import Embedder
+
+
+# A note whose body is only navigation (frontmatter tags, a title, a file embed,
+# prev/next wikilinks) carries no answerable prose. Indexing these hurts search:
+# their embeddings collapse into near-identical tag soup and crowd out real
+# answers for any query using the same vocabulary. Observed on a 2,600-note
+# vault: ~40 lecture stub notes, each a title plus a PDF embed, occupied the
+# entire top 10 for any query about that subject while answering nothing,
+# because their real content lived in PDFs the indexer cannot read.
+DEFAULT_MIN_PROSE_CHARS = 30
+
+# Fraction of scanned notes that, if skipped as thin, means the threshold is
+# almost certainly misconfigured. Aborts stale removal rather than purging the
+# index, since this script typically runs unattended on a timer. A correct
+# threshold excludes a few percent; 10% leaves ample headroom.
+THIN_SKIP_ABORT_FRACTION = 0.10
+
+
+def prose_length(content: str) -> int:
+    """Length of a note's original prose, excluding navigation and metadata.
+
+    Strips YAML frontmatter, embeds, wikilinks, markdown links, headings, list
+    markers, table pipes and rules, then measures what remains. A note that
+    only points at other things scores near zero; a note with real text does
+    not. Wikilink display text is dropped deliberately: a link is navigation,
+    not prose, even when its label is descriptive.
+    """
+    text = re.sub(r"^---\n.*?\n---", "", content, count=1, flags=re.DOTALL)
+    text = re.sub(r"!\[\[[^\]]*\]\]", "", text)           # embeds: ![[file.pdf]]
+    text = re.sub(r"\[\[[^\]]*\]\]", "", text)            # wikilinks
+    text = re.sub(r"!?\[[^\]]*\]\([^)]*\)", "", text)     # markdown links/images
+    text = re.sub(r"^\s{0,3}#{1,6}\s.*$", "", text, flags=re.MULTILINE)  # headings
+    text = re.sub(r"^\s*[-*+]\s+", "", text, flags=re.MULTILINE)         # bullets
+    text = re.sub(r"^\s*\d+\.\s+", "", text, flags=re.MULTILINE)         # ordered
+    text = re.sub(r"^\s*[-*_]{3,}\s*$", "", text, flags=re.MULTILINE)    # rules
+    text = re.sub(r"[|>`*_~#]", " ", text)                # table pipes, quotes, emphasis
+    return len(" ".join(text.split()))
 
 
 def _setup_logging(log_dir: str) -> logging.Logger:
@@ -41,7 +79,12 @@ def index_vault(config: dict, db: RootDB, embedder: Embedder, logger: logging.Lo
     vault_config = config["vault"]
     now = datetime.now(timezone.utc).isoformat()
 
-    stats = {"scanned": 0, "new": 0, "updated": 0, "unchanged": 0, "errors": 0, "stale_removed": 0}
+    stats = {
+        "scanned": 0, "new": 0, "updated": 0, "unchanged": 0,
+        "errors": 0, "stale_removed": 0, "skipped_thin": 0,
+    }
+
+    min_prose = config.get("indexer", {}).get("min_prose_chars", DEFAULT_MIN_PROSE_CHARS)
 
     # Collect all notes for batch embedding
     notes_to_embed = []
@@ -55,6 +98,14 @@ def index_vault(config: dict, db: RootDB, embedder: Embedder, logger: logging.Lo
         exclude_patterns=vault_config.get("exclude_patterns"),
     ):
         stats["scanned"] += 1
+
+        # Navigation-only notes are excluded from the index. Deliberately left
+        # out of all_paths, so any already indexed get dropped by the stale
+        # sweep below.
+        if min_prose and prose_length(note["content"]) < min_prose:
+            stats["skipped_thin"] += 1
+            continue
+
         all_paths.add(note["path"])
 
         # Check if content changed
@@ -82,7 +133,24 @@ def index_vault(config: dict, db: RootDB, embedder: Embedder, logger: logging.Lo
             stats["stale_removed"] = 0
             return stats
 
-    # Remove notes that no longer exist in vault
+    # Circuit breaker: a threshold that rejects a quarter of the vault is
+    # misconfigured, not a discovery. Keep the existing index rather than let an
+    # unattended run purge it.
+    if stats["scanned"] and stats["skipped_thin"] > THIN_SKIP_ABORT_FRACTION * stats["scanned"]:
+        logger.error(
+            f"SAFETY ABORT: min_prose_chars={min_prose} skipped {stats['skipped_thin']} of "
+            f"{stats['scanned']} notes ({stats['skipped_thin'] / stats['scanned']:.0%}). "
+            f"Threshold looks wrong. Skipping stale removal to prevent data loss."
+        )
+        return stats
+
+    if stats["skipped_thin"]:
+        logger.info(
+            f"Skipped {stats['skipped_thin']} navigation-only notes "
+            f"(under {min_prose} chars of prose)."
+        )
+
+    # Remove notes that no longer exist in vault, plus any now-skipped thin notes
     stats["stale_removed"] = db.remove_stale_notes(all_paths)
 
     if not notes_to_embed:
@@ -182,6 +250,44 @@ def run_extraction(config: dict, db: RootDB, logger: logging.Logger, limit: int 
     }
 
 
+def report_thin(config: dict) -> None:
+    """Print the notes that would be excluded as navigation-only, and exit.
+
+    Read-only. Use this to tune min_prose_chars before letting the indexer act
+    on it, since excluded notes are dropped from the index.
+    """
+    vault_config = config["vault"]
+    min_prose = config.get("indexer", {}).get("min_prose_chars", DEFAULT_MIN_PROSE_CHARS)
+
+    thin, kept, by_folder = [], 0, {}
+    for note in scan_vault(
+        vault_config["path"],
+        exclude_folders=vault_config.get("exclude_folders"),
+        exclude_patterns=vault_config.get("exclude_patterns"),
+    ):
+        length = prose_length(note["content"])
+        if length < min_prose:
+            thin.append((length, note["path"]))
+            top = note["path"].split("/")[0]
+            by_folder[top] = by_folder.get(top, 0) + 1
+        else:
+            kept += 1
+
+    total = len(thin) + kept
+    if not total:
+        print("No notes scanned. Check vault.path in config.yaml.")
+        return
+
+    print(f"min_prose_chars = {min_prose}")
+    print(f"would exclude {len(thin)} of {total} notes ({len(thin) / total:.1%}), keeping {kept}\n")
+    print("by top-level folder:")
+    for folder, count in sorted(by_folder.items(), key=lambda kv: -kv[1]):
+        print(f"  {count:5d}  {folder}")
+    print("\nclosest to the threshold (review these first):")
+    for length, path in sorted(thin, reverse=True)[:15]:
+        print(f"  {length:5d}  {path}")
+
+
 def main():
     import argparse
 
@@ -189,6 +295,17 @@ def main():
     parser.add_argument("--extract", action="store_true", help="Also run entity extraction after indexing")
     parser.add_argument("--extract-only", action="store_true", help="Skip indexing, only run entity extraction")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of notes to extract (for testing)")
+    parser.add_argument(
+        "--report-thin",
+        action="store_true",
+        help="List the navigation-only notes that would be excluded, then exit without touching the index",
+    )
+    parser.add_argument(
+        "--min-prose",
+        type=int,
+        default=None,
+        help="Override indexer.min_prose_chars for this run (use with --report-thin to tune)",
+    )
     args = parser.parse_args()
 
     project_root = Path(__file__).parent
@@ -196,6 +313,13 @@ def main():
 
     with open(config_path) as f:
         config = yaml.safe_load(f)
+
+    if args.min_prose is not None:
+        config.setdefault("indexer", {})["min_prose_chars"] = args.min_prose
+
+    if args.report_thin:
+        report_thin(config)
+        return
 
     logger = _setup_logging(str(project_root / config.get("indexer", {}).get("log_dir", "logs")))
     logger.info("=" * 50)
