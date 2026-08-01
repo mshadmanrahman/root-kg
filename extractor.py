@@ -161,11 +161,15 @@ def _extract_note(
     content = note["content"]
     content_hash = note["content_hash"]
 
+    # Call the LLM BEFORE clearing anything. This order is load-bearing:
+    # clear_extraction_for_note() deletes the note's relations and note-links,
+    # so doing it first means any extraction failure destroys the old data and
+    # writes nothing back. That is how ~2,500 notes lost their edges between
+    # 2026-04-24 and 2026-07-19. A raise here now leaves the note untouched.
+    result = llm.extract_entities(title, content)
+
     # Clear previous extraction data for this note (idempotent re-extraction)
     db.clear_extraction_for_note(note_id)
-
-    # Call LLM for extraction
-    result = llm.extract_entities(title, content)
 
     # Store entities
     entity_ids = {}
@@ -220,8 +224,19 @@ def _extract_note(
             )
             relation_count += 1
 
-    # Mark as extracted
-    db.mark_extracted(note_id, content_hash, llm.extraction_model)
+    # Mark as extracted -- but ONLY if the note actually yielded something.
+    # mark_extracted() stamps the current content_hash, and the retry gate in
+    # get_notes_needing_extraction() skips any note whose stored hash still
+    # matches, so stamping a zero-entity result latches it permanently. Backends
+    # now raise on failure, so a genuinely entity-less note is the only way to
+    # reach here empty; leave it unstamped so a later run can pick it up.
+    if not entity_ids:
+        logger.warning(
+            f"  Extraction yielded 0 entities for note {note_id} ({title!r}) -- "
+            f"NOT marking extracted, so it stays eligible for retry"
+        )
+    else:
+        db.mark_extracted(note_id, content_hash, llm.extraction_model)
 
     logger.debug(
         f"  Extracted: {title} -> {len(entity_ids)} entities, {relation_count} relations"

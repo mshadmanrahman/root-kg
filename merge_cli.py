@@ -100,8 +100,17 @@ def main():
     print("\nStopping daemons + backing up...")
     for d in DAEMONS:
         launchctl("stop", d)
+    # The timestamp alone is second-granular, so a sweep of several merges run back
+    # to back all resolved to ONE filename and each overwrote the last -- leaving a
+    # single backup taken mid-sweep, with the real pre-sweep state unrecoverable.
+    # Tag with the surviving id, and count up if that still exists.
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    backup = DB.with_name(f"root.db.pre-merge-{ts}")
+    stem = f"root.db.pre-merge-{ts}-keep{keep_id}"
+    backup = DB.with_name(stem)
+    dup = 2
+    while backup.exists():
+        backup = DB.with_name(f"{stem}-{dup}")
+        dup += 1
     subprocess.run(["sqlite3", str(DB), "PRAGMA wal_checkpoint(TRUNCATE);"], capture_output=True)
     subprocess.run(["sqlite3", str(DB), f".backup '{backup}'"], check=True)
     print(f"  backup: {backup.name}")

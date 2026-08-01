@@ -38,7 +38,19 @@ if _env_path.exists():
             os.environ.setdefault(key.strip(), value.strip())
 
 
-ENTITY_TYPES = ["person", "project", "decision", "event", "concept", "organization"]
+# Widened 2026-08-01 from the original 6. The extractor's schema-drift guard was
+# coercing every unlisted value into "concept", which is how 7,559 of 15,368
+# entities ended up in that one bucket -- and per-type resolution clustering is
+# only tractable if the types actually partition the graph. Grounded in the live
+# distribution of off-schema values the model had already reached for:
+# tool 96, skill 42, technology 25, document 24. "tool" and "document" absorb
+# their synonyms via _ENTITY_TYPE_SYNONYMS in extractor.py; "skill" is kept
+# separate because Claude skills are a first-class object in this corpus and
+# collapsing them into "tool" would lose a distinction that is actually used.
+ENTITY_TYPES = [
+    "person", "project", "decision", "event", "concept", "organization",
+    "tool", "document", "skill",
+]
 RELATION_TYPES = [
     "works_with", "owns", "decided", "attended", "discussed",
     "blocked_by", "depends_on", "manages", "created", "reviewed",
@@ -416,14 +428,21 @@ Return ONLY valid JSON in this exact format:
                 "entities": [
                     {
                         "name": "string",
-                        "type": "person|project|decision|event|concept|organization",
+                        # Derived from the enums rather than hardcoded: this
+                        # literal used to list the original 6 entity types and
+                        # would have silently disagreed with ENTITY_TYPES the
+                        # moment either list changed. Unlike the anthropic and
+                        # openrouter backends, this prompt is the ONLY thing
+                        # constraining the model here, so a stale list here
+                        # directly becomes schema drift in the database.
+                        "type": "|".join(ENTITY_TYPES),
                         "aliases": ["string"],
                     }
                 ],
                 "relations": [
                     {
                         "from_entity": "string",
-                        "relation": "works_with|owns|decided|discussed|attended|blocked_by|depends_on|manages|created|reviewed",
+                        "relation": "|".join(RELATION_TYPES),
                         "to_entity": "string",
                         "confidence": 0.9,
                         "context": "string",
@@ -440,15 +459,27 @@ Return ONLY valid JSON in this exact format:
             f"{user_msg}"
         )
 
-        try:
-            raw = self._run_claude_cli(
-                prompt=prompt,
-                model=self.extraction_model,
-                system_prompt=EXTRACTION_SYSTEM,
-                timeout=60,
-            )
-        except RuntimeError:
-            return {"entities": [], "relations": []}
+        # Every failure below MUST raise. Returning an empty-but-well-formed
+        # result makes a broken CLI call indistinguishable from a note that
+        # genuinely has no entities, and the caller reacts to the two
+        # identically: it wipes the note's existing relations/links and stamps
+        # the note as extracted against its current content hash, which the
+        # retry gate (db.py get_notes_needing_extraction) then never revisits.
+        # That is exactly how ~2,500 notes were silently emptied between
+        # 2026-04-24 and 2026-07-19 while the logs read "0 errors".
+        raw = self._run_claude_cli(
+            prompt=prompt,
+            model=self.extraction_model,
+            system_prompt=EXTRACTION_SYSTEM,
+            # Measured 2026-08-01 over 8 real notes: min 16.2s, median 26.8s,
+            # max 58.8s. The old 60s cap sat *below* the observed max, so it
+            # clipped the tail -- and because the timeout used to return an
+            # empty result instead of raising, every clip silently emptied a
+            # note. Latency does not track note length (28K chars -> 23.0s,
+            # 1,049 chars -> 54.3s), it is CLI/queue variance, so sizing this
+            # from content length would not help. 300s is ~5x the observed max.
+            timeout=300,
+        )
 
         # Tolerate stray code fences or leading/trailing prose
         text = raw.strip()
@@ -466,12 +497,18 @@ Return ONLY valid JSON in this exact format:
 
         try:
             result = json.loads(text)
-            if "entities" in result and "relations" in result:
-                return result
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            raise RuntimeError(
+                f"claude_cli extraction returned unparseable JSON ({e}); "
+                f"first 200 chars of output: {raw.strip()[:200]!r}"
+            ) from e
 
-        return {"entities": [], "relations": []}
+        if not isinstance(result, dict) or "entities" not in result or "relations" not in result:
+            raise RuntimeError(
+                "claude_cli extraction JSON is missing the 'entities'/'relations' keys; "
+                f"got keys {sorted(result) if isinstance(result, dict) else type(result).__name__}"
+            )
+        return result
 
     def _synthesize_claude_cli(self, question: str, context: str) -> str:
         """Synthesis via `claude --print`. Plain text in, plain text out."""

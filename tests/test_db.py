@@ -305,6 +305,29 @@ class TestMergeEntities:
         assert db_with_notes.conn.execute(
             "SELECT COUNT(*) FROM entities WHERE id=?", (loser,)).fetchone()[0] == 0
 
+    def test_merge_transfers_unique_aliases(self, db_with_notes):
+        # Regression: alias is globally UNIQUE, so INSERT OR IGNORE-ing the loser's
+        # rows under keep_id collided with the loser's OWN row every time; the
+        # follow-up DELETE then destroyed the alias. Measured on the live graph:
+        # 0 of 25 aliases survived a 9-merge sweep. The shared-alias test above
+        # passed throughout, because collapsing a duplicate was the one path that
+        # worked -- a UNIQUE alias on the loser was never covered.
+        keep = db_with_notes.upsert_entity("Sebastian", "person")
+        loser = db_with_notes.upsert_entity("Sebastian Wallmark", "person")
+        db_with_notes.add_alias(loser, "Sebbe")
+        db_with_notes.add_alias(loser, "sebastian.wallmark@example.com")
+        db_with_notes.merge_entities(keep_id=keep, merge_id=loser)
+        surviving = {
+            r["alias"] for r in db_with_notes.conn.execute(
+                "SELECT alias FROM entity_aliases WHERE entity_id=?", (keep,))
+        }
+        assert "Sebbe" in surviving
+        assert "sebastian.wallmark@example.com" in surviving
+        assert db_with_notes.resolve_entity("Sebbe") == keep
+        # and nothing is left dangling on the deleted loser
+        assert db_with_notes.conn.execute(
+            "SELECT COUNT(*) FROM entity_aliases WHERE entity_id=?", (loser,)).fetchone()[0] == 0
+
     def test_merge_drops_self_loops(self, db_with_notes):
         # A relation BETWEEN the merged pair must not survive as a self-loop.
         keep = db_with_notes.upsert_entity("Sebastian", "person")

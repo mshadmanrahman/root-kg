@@ -109,6 +109,47 @@ class TestExtractNote:
         assert linked_notes[0]["title"] == "Meeting with Ric"
 
 
+    def test_failed_extraction_preserves_existing_data(self, db, mock_llm, logger):
+        # Regression, 2026-08-01. clear_extraction_for_note() used to run BEFORE
+        # the LLM call, so a failed extraction deleted the note's relations and
+        # note-links and wrote nothing back. Between 2026-04-24 and 2026-07-19
+        # that silently emptied ~2,500 notes; the graph ended up with 15,368
+        # entities and only 732 relations.
+        note = db.get_notes_needing_extraction()[0]
+        _extract_note(db, mock_llm, note, logger)
+        ric_id = db.resolve_entity("Ric")
+        assert len(db.get_entity_relations(ric_id)) == 1
+
+        mock_llm.extract_entities.side_effect = RuntimeError("claude_cli exited 1")
+        with pytest.raises(RuntimeError):
+            _extract_note(db, mock_llm, note, logger)
+
+        # the failure must not have cost us the previous extraction
+        assert len(db.get_entity_relations(ric_id)) == 1
+        assert db.conn.execute(
+            "SELECT COUNT(*) FROM entity_note_links WHERE note_id=?", (note["id"],)
+        ).fetchone()[0] == 2
+
+    def test_empty_extraction_is_not_marked_extracted(self, db, logger):
+        # Regression, 2026-08-01. mark_extracted() ran unconditionally, stamping
+        # the note's current content_hash. get_notes_needing_extraction() gates
+        # on that hash, so a zero-entity result latched permanently and the note
+        # was never retried while root_stats still counted it as extracted.
+        empty_llm = MagicMock()
+        empty_llm.extraction_model = "test-model"
+        empty_llm.extract_entities.return_value = {"entities": [], "relations": []}
+
+        note = db.get_notes_needing_extraction()[0]
+        result = _extract_note(db, empty_llm, note, logger)
+
+        assert result["entity_count"] == 0
+        assert db.conn.execute(
+            "SELECT COUNT(*) FROM entity_extractions WHERE note_id=?", (note["id"],)
+        ).fetchone()[0] == 0
+        # still eligible, so a later run can pick it up
+        assert [n["id"] for n in db.get_notes_needing_extraction()] == [note["id"]]
+
+
 class TestExtractAll:
     def test_processes_all_notes(self, db, mock_llm, logger):
         stats = extract_all(db, mock_llm, logger)

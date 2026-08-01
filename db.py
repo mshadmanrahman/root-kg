@@ -646,8 +646,9 @@ class RootDB:
         whenever the pair shared a note or an alias: the entity_note_links
         (entity_id, note_id) primary key and the entity_aliases UNIQUE(alias). It
         also left self-loop relations (a->a) behind and was not transactional, so a
-        mid-way failure corrupted the graph. This version moves note-links and
-        aliases with INSERT OR IGNORE (collisions collapse instead of raising),
+        mid-way failure corrupted the graph. This version moves note-links with
+        INSERT OR IGNORE and aliases with UPDATE OR IGNORE (collisions collapse
+        instead of raising; see the alias comment below for why the two differ),
         sweeps self-loops, sums mention_count NULL-safely, and runs in one
         transaction that rolls back on any error. No-ops if the ids are equal or
         either row is missing, so it is safe to call from a merge loop.
@@ -670,10 +671,15 @@ class RootDB:
                 "INSERT OR IGNORE INTO entity_note_links(entity_id, note_id) "
                 "SELECT ?, note_id FROM entity_note_links WHERE entity_id=?", (keep_id, merge_id))
             self.conn.execute("DELETE FROM entity_note_links WHERE entity_id=?", (merge_id,))
-            # aliases: INSERT OR IGNORE dodges the UNIQUE(alias) collision
+            # aliases: alias is globally UNIQUE, so INSERTing the loser's rows under
+            # keep_id always collided with the loser's OWN existing row; OR IGNORE
+            # swallowed it and the DELETE below then destroyed the alias outright
+            # (measured: 0 of 25 aliases survived a 9-merge sweep). Re-point the rows
+            # instead. OR IGNORE still covers the case where the survivor already
+            # owns that exact alias string, and the DELETE clears those leftovers.
             self.conn.execute(
-                "INSERT OR IGNORE INTO entity_aliases(entity_id, alias) "
-                "SELECT ?, alias FROM entity_aliases WHERE entity_id=?", (keep_id, merge_id))
+                "UPDATE OR IGNORE entity_aliases SET entity_id=? WHERE entity_id=?",
+                (keep_id, merge_id))
             self.conn.execute("DELETE FROM entity_aliases WHERE entity_id=?", (merge_id,))
             # keep the merged name as an alias of the survivor (if distinct, not taken)
             if merged["name"] and merged["name"].lower() != (keep["name"] or "").lower():
