@@ -386,32 +386,50 @@ class RootDB:
           3. most-mentioned, then lowest id (stable final tie-break).
         relation count, NOT mention_count, is the primary signal: mention_count
         is inflated by re-extraction (upsert increments it every run), so it is
-        an unreliable "which row is the real one" measure. When entity_type is
-        None the type term is uniformly NULL and drops out of the ordering, so
-        untyped callers still get the most-connected shard deterministically.
+        an unreliable "which row is the real one" measure.
+
+        entity_type is a FILTER, not a ranking preference (fixed 2026-08-02).
+        It used to be only an ORDER BY term applied separately inside the name
+        query and the alias query, and the alias query ran only if the name
+        query found nothing. So a wrong-type NAME match beat a right-type ALIAS
+        match and the alias lookup never executed at all. Measured live:
+        ``resolve_entity("Robin", "person")`` returned a *project* named
+        "Robin" (0 relations) instead of the person "Robin Fielding" (306
+        relations) who holds "Robin" as an alias. This is a prime suspect for
+        the corpus-wide cross-type duplicate groups.
+
+        The ladder below tries right-type matches first, both by name and by
+        alias, before falling back to any type. The unfiltered rungs preserve
+        the old permissive recall, so nothing that used to resolve stops
+        resolving; a wrong-type answer is now only ever a last resort.
         """
-        order = """
+        RANK = """
             ORDER BY
-                (e.entity_type = ?) DESC,
                 (SELECT COUNT(*) FROM relations r
                     WHERE r.entity_a_id = e.id OR r.entity_b_id = e.id) DESC,
                 e.mention_count DESC,
                 e.id ASC
             LIMIT 1
         """
-        row = self.conn.execute(
-            "SELECT e.id FROM entities e WHERE e.name = ? COLLATE NOCASE" + order,
-            (name, entity_type),
-        ).fetchone()
-        if row:
-            return row["id"]
-        row = self.conn.execute(
-            "SELECT e.id AS entity_id FROM entity_aliases ea "
+        BY_NAME = "SELECT e.id FROM entities e WHERE e.name = ? COLLATE NOCASE"
+        BY_ALIAS = (
+            "SELECT e.id FROM entity_aliases ea "
             "JOIN entities e ON e.id = ea.entity_id "
-            "WHERE ea.alias = ? COLLATE NOCASE" + order,
-            (name, entity_type),
-        ).fetchone()
-        return row["entity_id"] if row else None
+            "WHERE ea.alias = ? COLLATE NOCASE"
+        )
+
+        attempts = []
+        if entity_type is not None:
+            attempts.append((BY_NAME + " AND e.entity_type = ?", (name, entity_type)))
+            attempts.append((BY_ALIAS + " AND e.entity_type = ?", (name, entity_type)))
+        attempts.append((BY_NAME, (name,)))
+        attempts.append((BY_ALIAS, (name,)))
+
+        for sql, params in attempts:
+            row = self.conn.execute(sql + RANK, params).fetchone()
+            if row:
+                return row["id"]
+        return None
 
     def link_entity_to_note(self, entity_id: int, note_id: int) -> None:
         """Record that an entity was mentioned in a note."""

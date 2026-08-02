@@ -154,6 +154,44 @@ class TestResolveDeterminism:
         assert db.resolve_entity("hl") == strong  # case-insensitive alias
 
 
+class TestResolveTypeFilter:
+    # Regression, 2026-08-02. entity_type was only an ORDER BY preference inside
+    # each of two sequential queries (name, then alias), and the alias query ran
+    # only when the name query found nothing. So a wrong-type NAME match beat a
+    # right-type ALIAS match. Measured live: resolve_entity("Robin", "person")
+    # returned a project named "Robin" (0 rels) instead of the person Robin
+    # Fielding (306 rels) holding "Robin" as an alias.
+    def test_right_type_alias_beats_wrong_type_name(self, db):
+        proj = db.upsert_entity("Robin", "project")
+        person = db.upsert_entity("Robin Fielding", "person")
+        db.add_alias(person, "Robin")
+        assert db.resolve_entity("Robin", "person") == person
+        assert db.resolve_entity("Robin", "project") == proj
+
+    def test_falls_back_to_any_type_when_no_type_match(self, db):
+        # the permissive old behaviour must survive: if nothing of the requested
+        # type exists, an off-type match is still better than None
+        proj = db.upsert_entity("Atlas", "project")
+        assert db.resolve_entity("Atlas", "person") == proj
+
+    def test_untyped_lookup_still_prefers_most_connected(self, db):
+        a = db.upsert_entity("Acme", "organization")
+        b = db.upsert_entity("ACME", "project")
+        other = db.upsert_entity("Someone", "person")
+        n = db.upsert_note(path="n.md", title="n", content="c", content_hash="h",
+                           folder="f", indexed_at="2026-01-01T00:00:00Z")
+        db.upsert_relation(entity_a_id=b, relation_type="owns", entity_b_id=other,
+                           source_note_id=n, confidence=0.9, context="x")
+        assert db.resolve_entity("Acme") == b   # b has the relation
+        assert a != b
+
+    def test_right_type_name_still_wins_over_right_type_alias(self, db):
+        exact = db.upsert_entity("Sam", "person")
+        other = db.upsert_entity("Sam Whitfield", "person")
+        db.add_alias(other, "Sammy")
+        assert db.resolve_entity("Sam", "person") == exact
+
+
 class TestRelations:
     def test_create_relation(self, db_with_notes):
         ric = db_with_notes.upsert_entity("Ric", "person")
