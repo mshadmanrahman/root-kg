@@ -398,3 +398,124 @@ class TestEntityStats:
         assert stats["total_entities"] == 2
         assert stats["by_entity_type"]["person"] == 1
         assert stats["by_entity_type"]["project"] == 1
+
+
+class TestClearExtractionForNote:
+    """Regression, 2026-08-07. clear_extraction_for_note() promised entity removal
+    in its docstring and only ever deleted relations, links and the extraction
+    record. Extraction is nondeterministic, so every re-run stranded whatever the
+    fresh LLM pass did not reproduce. On a live graph that reached 11,172 orphans
+    out of 21,696 entities (51%), unreachable by search and invisible to traversal
+    but counted in every stats line as real.
+    """
+
+    def _two_notes(self, db):
+        for i in (1, 2):
+            db.upsert_note(
+                path=f"n{i}.md",
+                title=f"N{i}",
+                content="c",
+                content_hash=f"h{i}",
+                folder="f",
+                source_type="vault",
+                indexed_at="2026-01-01T00:00:00Z",
+            )
+        return [r[0] for r in db.conn.execute("SELECT id FROM notes ORDER BY id")]
+
+    def test_sweeps_entities_only_this_note_held(self, db):
+        n1, _ = self._two_notes(db)
+        eid = db.upsert_entity("Ric", "person")
+        db.link_entity_to_note(eid, n1)
+
+        db.clear_extraction_for_note(n1)
+
+        assert db.conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0] == 0
+
+    def test_keeps_entities_another_note_still_links(self, db):
+        n1, n2 = self._two_notes(db)
+        eid = db.upsert_entity("Heimdall", "project")
+        db.link_entity_to_note(eid, n1)
+        db.link_entity_to_note(eid, n2)
+
+        db.clear_extraction_for_note(n1)
+
+        assert db.resolve_entity("Heimdall") == eid
+
+    def test_sweeps_entities_held_only_by_a_relation(self, db):
+        # The subtle half. _extract_note() resolves a relation's endpoints via
+        # resolve_entity(), which reuses an entity that already exists elsewhere
+        # and does NOT link it to this note. Such an entity is held up by the
+        # relation alone, so a sweep scoped to note-links only still strands it.
+        # A 3-note re-extraction leaked exactly this way after the first cut.
+        n1, _ = self._two_notes(db)
+        a = db.upsert_entity("Ric", "person")
+        db.link_entity_to_note(a, n1)
+        endpoint_only = db.upsert_entity("Odin", "project")
+        db.upsert_relation(
+            entity_a_id=a,
+            relation_type="uses",
+            entity_b_id=endpoint_only,
+            source_note_id=n1,
+        )
+
+        db.clear_extraction_for_note(n1)
+
+        assert db.resolve_entity("Odin") is None
+
+    def test_leaves_no_orphans_behind(self, db):
+        n1, _ = self._two_notes(db)
+        a = db.upsert_entity("Ric", "person")
+        db.link_entity_to_note(a, n1)
+        b = db.upsert_entity("Odin", "project")
+        db.upsert_relation(
+            entity_a_id=a, relation_type="uses", entity_b_id=b, source_note_id=n1
+        )
+
+        db.clear_extraction_for_note(n1)
+
+        orphans = db.conn.execute(
+            "SELECT COUNT(*) FROM entities e"
+            " WHERE NOT EXISTS(SELECT 1 FROM entity_note_links l WHERE l.entity_id = e.id)"
+            "   AND NOT EXISTS(SELECT 1 FROM relations r"
+            "                  WHERE r.entity_a_id = e.id OR r.entity_b_id = e.id)"
+        ).fetchone()[0]
+        assert orphans == 0
+
+    def test_sweeps_aliases_of_deleted_entities(self, db):
+        # entity_aliases declares ON DELETE CASCADE, but SQLite ignores foreign
+        # keys unless PRAGMA foreign_keys = ON and this connection never sets it.
+        # Only reachable once entities began being deleted at all.
+        n1, _ = self._two_notes(db)
+        eid = db.upsert_entity("Ric", "person")
+        db.add_alias(eid, "Rick")
+        db.link_entity_to_note(eid, n1)
+
+        db.clear_extraction_for_note(n1)
+
+        assert db.conn.execute("SELECT COUNT(*) FROM entity_aliases").fetchone()[0] == 0
+
+    def test_keeps_aliases_of_surviving_entities(self, db):
+        n1, n2 = self._two_notes(db)
+        eid = db.upsert_entity("Heimdall", "project")
+        db.add_alias(eid, "HD")
+        db.link_entity_to_note(eid, n1)
+        db.link_entity_to_note(eid, n2)
+
+        db.clear_extraction_for_note(n1)
+
+        assert db.resolve_entity("HD") == eid
+
+    def test_freed_alias_can_be_reclaimed(self, db):
+        # alias is UNIQUE. A stale row squats the name: add_alias() for a new
+        # entity hits INSERT OR IGNORE, silently does nothing, and the alias
+        # resolves to None forever.
+        n1, _ = self._two_notes(db)
+        old = db.upsert_entity("Ric", "person")
+        db.add_alias(old, "Rick")
+        db.link_entity_to_note(old, n1)
+
+        db.clear_extraction_for_note(n1)
+
+        new = db.upsert_entity("Richard", "person")
+        db.add_alias(new, "Rick")
+        assert db.resolve_entity("Rick") == new

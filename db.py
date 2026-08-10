@@ -735,10 +735,79 @@ class RootDB:
         }
 
     def clear_extraction_for_note(self, note_id: int) -> None:
-        """Remove all entities/relations sourced from a specific note (for re-extraction)."""
+        """Remove all entities/relations sourced from a specific note (for re-extraction).
+
+        The entity sweep at the bottom is the part that was missing. This method
+        promised entity removal in its docstring from the beginning and only ever
+        deleted relations, links and the extraction record, so every
+        re-extraction stranded whatever the fresh LLM pass did not reproduce.
+        Extraction is nondeterministic, so that is a few entities per note on
+        every single run, compounding forever. Measured 2026-08-07 on a live
+        graph before the fix: 11,172 of 21,696 entities, 51% of the graph, held
+        no relation and no note link. Unreachable by search, invisible to
+        traversal, and counted in every stats line as if they were real.
+
+        Scope matters here. The sweep is restricted to entities this note
+        actually pointed at, captured before the links are deleted. A global
+        "delete every orphan" sweep hidden inside a single-note call would
+        delete unrelated rows as a side effect of re-indexing one file.
+
+        Safe to delete rather than orphan because the caller runs the LLM
+        first: _extract_note() only reaches this call after extract_entities()
+        returns, so a failed extraction raises before anything is cleared and
+        leaves the note's old graph intact (see the comment at extractor.py:164
+        and test_failed_extraction_preserves_existing_data).
+        """
+        # Both halves are needed. Note-links cover entities the note itself
+        # named. Relation endpoints cover the rest: _extract_note() resolves a
+        # relation's from/to through resolve_entity(), which matches an entity
+        # that already exists elsewhere and does NOT link it to this note. Such
+        # an entity is held up by the relation alone, so clearing the relation
+        # without considering it here strands it, which is exactly what a
+        # 3-note re-extraction still produced after the first cut of this fix.
+        touched = {
+            row[0]
+            for row in self.conn.execute(
+                "SELECT entity_id FROM entity_note_links WHERE note_id = ?", (note_id,)
+            )
+        }
+        for a_id, b_id in self.conn.execute(
+            "SELECT entity_a_id, entity_b_id FROM relations WHERE source_note_id = ?",
+            (note_id,),
+        ):
+            touched.add(a_id)
+            touched.add(b_id)
         self.conn.execute("DELETE FROM relations WHERE source_note_id = ?", (note_id,))
         self.conn.execute("DELETE FROM entity_note_links WHERE note_id = ?", (note_id,))
         self.conn.execute("DELETE FROM entity_extractions WHERE note_id = ?", (note_id,))
+        if touched:
+            # An entity survives if any OTHER note still links it or any relation
+            # still references it; only the ones this note alone held up go.
+            self.conn.executemany(
+                "DELETE FROM entities WHERE id = ?"
+                " AND NOT EXISTS(SELECT 1 FROM entity_note_links l"
+                "                WHERE l.entity_id = entities.id)"
+                " AND NOT EXISTS(SELECT 1 FROM relations r"
+                "                WHERE r.entity_a_id = entities.id"
+                "                   OR r.entity_b_id = entities.id)",
+                [(eid,) for eid in touched],
+            )
+            # Aliases do NOT cascade. entity_aliases declares ON DELETE CASCADE
+            # but SQLite ignores foreign keys unless PRAGMA foreign_keys = ON,
+            # and this connection never sets it (verified: the pragma reads 0).
+            # Left behind, the row is worse than dangling: alias is UNIQUE, so
+            # the dead row squats the name, a later add_alias() for a different
+            # entity hits INSERT OR IGNORE and silently does nothing, and
+            # resolve_entity() returns None for that alias forever. This only
+            # became reachable once entities started being deleted above, so it
+            # ships with the sweep rather than after it. Scoped by NOT EXISTS so
+            # aliases of entities that survived the sweep are untouched.
+            self.conn.executemany(
+                "DELETE FROM entity_aliases WHERE entity_id = ?"
+                " AND NOT EXISTS(SELECT 1 FROM entities e"
+                "                WHERE e.id = entity_aliases.entity_id)",
+                [(eid,) for eid in touched],
+            )
         self.conn.commit()
 
     def close(self):
