@@ -402,6 +402,20 @@ root-kg/
 - ~500MB disk for embeddings model (downloaded on first run)
 - One of: Anthropic API key (~$5 to start), OpenRouter key (free $1 credit), or Ollama (free, local)
 
+## What went wrong and what I learned
+
+`clear_extraction_for_note()` had a docstring saying it removed all entities and relations sourced from a note. It deleted relations, note links, and the extraction record. It never deleted a single entity row.
+
+Extraction runs through an LLM, so it is nondeterministic. Re-index a note and the fresh pass returns a slightly different entity set. Everything the old pass found and the new one missed stayed in the database forever, holding no relation and no note link. A few per note, every run, compounding.
+
+When I finally counted, 11,172 of 21,696 entities were unreachable. That is 51% of the graph. Search could not return them, traversal could not reach them, and `root_stats()` counted every one as real. That last part is why it took months to notice. The graph was reporting roughly double its true size and I believed it.
+
+The obvious fix was wrong. I swept entities holding a note link to the cleared note, and a three-note re-extraction still leaked two orphans. `_extract_note()` resolves a relation's endpoints through `resolve_entity()`, which matches an entity that already exists elsewhere and does not link it to the current note. That entity is held up by the relation alone. Both sets have to go: entities linked to the note, and both endpoints of every relation sourced from it.
+
+Fixing that exposed a second bug that had been unreachable until then. `entity_aliases` declares `ON DELETE CASCADE`, but SQLite ignores foreign keys unless the connection sets `PRAGMA foreign_keys = ON`, and this code never did. Deleted entities left their alias rows behind. `alias` is `UNIQUE`, so the dead row squats the name: `add_alias()` for a new entity hits `INSERT OR IGNORE`, does nothing, and that alias resolves to `None` permanently. It could not happen before, because nothing was ever deleted. The fix created the conditions for it.
+
+Last one, and it is the least technical. I fixed this in the copy I run on 2026-08-07 and did not push it here until 2026-08-10. Anyone who cloned in between got the orphan factory. A fix that only exists in the copy you run is not a fix.
+
 ## Contributing
 
 PRs welcome. The codebase is intentionally simple: Python 3.11+, no frameworks, small files (<400 lines each).
