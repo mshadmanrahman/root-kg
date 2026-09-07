@@ -163,6 +163,7 @@ This is almost free to run. The initial setup costs a few dollars. After that, d
 | Incremental re-index | Every 2 hours | $0 (local) |
 | Incremental extraction | Every 2 hours, only changed notes | ~$0.01-0.05/day |
 | Queries via root_ask | On-demand | ~$0.01/query (Sonnet) |
+| Extra root with `extract: false` | Every 2 hours | $0, searchable but never sent to an LLM |
 | **Monthly estimate** | | **$1-3** |
 
 Compare that to Mem.ai ($20/mo) or Rewind ($20/mo)  - both cloud-only, both proprietary. ROOT runs locally, costs a latte per month, and your data never leaves your machine unless you choose a cloud LLM for synthesis.
@@ -181,12 +182,12 @@ ROOT has a four-step pipeline: ingest, embed, extract, query.
 ┌──────────────────────────────────────────────────────────────┐
 │                      DATA SOURCES                             │
 │                                                               │
-│  Obsidian Vault        meetings (Granola)        emails       │
-│  2,500+ notes          auto or manual            Gmail MCP    │
-│  auto every 2h         via root_ingest           via ingest   │
-└──────────────┬───────────────┬───────────────┬───────────────┘
-               │               │               │
-               ▼               ▼               ▼
+│  Obsidian Vault    extra roots      meetings        emails    │
+│  2,500+ notes      docs, agent      (Granola)       Gmail MCP │
+│  auto every 2h     memory, any md   via ingest      via ingest│
+└─────────┬─────────────┬─────────────────┬──────────────┬─────┘
+          │             │                 │              │
+          ▼             ▼                 ▼              ▼
 ┌──────────────────────────────────────────────────────────────┐
 │           STEP 1: INDEXING (free, runs locally)               │
 │                                                               │
@@ -396,7 +397,7 @@ root-kg/
 │   ├── graph.py        # Entity graph, influence map, decision trail
 │   └── intelligence.py # root_ask (GraphRAG), weekly digest
 ├── adapters/
-│   └── vault.py        # Obsidian vault scanner
+│   └── vault.py        # markdown scanner (vault and any extra root)
 ├── config.example.yaml # Template config
 ├── .env.example        # Template env
 └── data/root.db        # Everything in one file (gitignored)
@@ -406,7 +407,7 @@ root-kg/
 - **Single file database.** No Postgres, no Neo4j, no Docker. One SQLite file.
 - **Zero new pip deps for LLM.** Uses stdlib `urllib` for API calls. No `anthropic` or `openai` SDK.
 - **Incremental everything.** SHA-256 content hashing for both indexing and extraction. Only changed notes are reprocessed.
-- **Safety guards.** If the vault scan returns 0 results but the DB has existing notes, the indexer aborts instead of purging. Prevents data loss from permission issues or inaccessible paths.
+- **Safety guards, per root.** If a root scans 0 notes while the DB holds notes for it, that root skips its stale sweep instead of purging, and an unreadable root is skipped with a warning rather than failing the run. Each root sweeps only its own notes, so one inaccessible folder cannot take another one down. Prevents data loss from permission issues, unmounted drives and inaccessible paths.
 - **Immutable data patterns.** All functions return new data, never mutate inputs.
 - **Graph on SQLite.** Recursive CTEs for traversal. <10ms at depth 2 with thousands of entities.
 
