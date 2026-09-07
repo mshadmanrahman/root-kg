@@ -299,11 +299,17 @@ class RootDB:
         ).fetchone()
         return row[0] if row else 0
 
-    def remove_stale_notes(self, valid_paths: set[str]) -> int:
-        """Remove notes whose paths no longer exist. Returns count removed."""
+    def remove_stale_notes(self, valid_paths: set[str], source_type: str = "vault") -> int:
+        """Remove notes whose paths no longer exist. Returns count removed.
+
+        Scoped to one source_type. Each indexed root sweeps only its own notes,
+        so an unreachable root cannot purge another root's notes.
+        """
         all_paths = {
             r["path"]
-            for r in self.conn.execute("SELECT path FROM notes WHERE source_type = 'vault'").fetchall()
+            for r in self.conn.execute(
+                "SELECT path FROM notes WHERE source_type = ?", (source_type,)
+            ).fetchall()
         }
         stale = all_paths - valid_paths
         if not stale:
@@ -483,18 +489,31 @@ class RootDB:
         )
         self.conn.commit()
 
-    def get_notes_needing_extraction(self) -> list[dict]:
-        """Get notes where content has changed since last extraction or never extracted."""
+    def get_notes_needing_extraction(
+        self, source_types: Optional[list[str]] = None
+    ) -> list[dict]:
+        """Get notes where content has changed since last extraction or never extracted.
+
+        source_types limits extraction to those sources. This is the cost gate:
+        a root can be indexed (free, local embeddings) without being sent to the
+        LLM for entity extraction. None means every source, the old behaviour.
+        """
+        where = ["(ee.note_id IS NULL OR ee.content_hash != n.content_hash)"]
+        params: list = []
+        if source_types:
+            where.append(f"n.source_type IN ({','.join('?' * len(source_types))})")
+            params.extend(source_types)
+
         rows = self.conn.execute(
-            """
+            f"""
             SELECT n.id, n.path, n.title, n.content, n.content_hash, n.folder,
                    n.source_type, n.created_at, n.indexed_at
             FROM notes n
             LEFT JOIN entity_extractions ee ON ee.note_id = n.id
-            WHERE ee.note_id IS NULL
-               OR ee.content_hash != n.content_hash
+            WHERE {' AND '.join(where)}
             ORDER BY n.indexed_at DESC
-            """
+            """,
+            params,
         ).fetchall()
         return [dict(r) for r in rows]
 

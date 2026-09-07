@@ -5,6 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [1.2.0] — 2026-09-07
+
+### Added
+
+- **Multiple index roots.** `vault.roots` in `config.yaml` takes a list of folders alongside the main `vault.path`. Each root gets its own `source_type`, so `root_stats` reports per-root counts, `root_search` can filter to one root, and each root's stale sweep only removes its own notes. A scalar `vault.path` keeps working unchanged, and extra roots namespace their note paths with a prefix (their name, by default) so an existing vault is never orphaned or re-embedded.
+
+- **`extract` flag per root, separating indexing cost from extraction cost.** Indexing embeds notes locally with MiniLM and is free; entity extraction calls an LLM once per note. Those were one decision and are now two. A root with `extract: false` is fully searchable and never reaches the LLM, so a large low-entity corpus costs nothing to make searchable. Measured on the author's setup: adding 939 agent memory files with `extract: false` left the extraction queue at 27 notes rather than 966.
+
+### Changed
+
+- **`RootDB.remove_stale_notes(valid_paths, source_type="vault")`** takes the source as a parameter. It previously hardcoded `source_type = 'vault'`, which meant a second root could not sweep its own notes.
+
+- **`RootDB.get_notes_needing_extraction(source_types=None)`** filters by source. `None` keeps the old behaviour of every source.
+
+- **`extract_all(..., source_types=None)`** passes that filter through from the indexer.
+
+### Fixed
+
+- **A missing folder can no longer purge an index.** The zero-scan safety guard and the thin-note circuit breaker were evaluated once against the totals for the whole run, so with several roots configured, one unreachable folder scanning zero notes would pass a global check that other roots had satisfied, and its notes would be swept as stale. Both guards now run per root, and an unreadable root is skipped with a warning instead of taking down the run.
+
+---
+
 ## [1.1.0] — 2026-06-02
 
 ### Added

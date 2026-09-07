@@ -11,6 +11,30 @@ vault:
   exclude_patterns:
     - "*.excalidraw.md"
 
+  # Extra roots beyond the main vault. Optional; omit for single-vault setups.
+  #
+  # Each root gets its own source_type, so stale sweeps, index stats and the
+  # root_search source filter stay independent per root. An unreachable root is
+  # skipped, never swept.
+  #
+  # `extract` is the cost gate and defaults to false. Indexing is free (local
+  # MiniLM embeddings on CPU), while entity extraction calls an LLM per note.
+  # So a root is semantically searchable the moment it is indexed, and only
+  # earns extraction if you want its entities in the graph. Point a large,
+  # low-entity corpus here with extract: false and it costs you nothing.
+  #
+  # `prefix` namespaces the root's paths, defaulting to its name, because note
+  # paths are unique and two roots can both contain `index.md`. The main vault
+  # above keeps no prefix, so adding roots never re-indexes an existing vault.
+  #
+  # roots:
+  #   - name: project-docs
+  #     path: "~/code/myproject/docs"
+  #     extract: true
+  #   - name: agent-memory
+  #     path: "~/.config/agent/memory"
+  #     extract: false
+
 embeddings:
   # Local model, free, runs on CPU. No API key needed.
   model: "all-MiniLM-L6-v2"

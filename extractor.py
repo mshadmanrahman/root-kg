@@ -89,13 +89,16 @@ def extract_all(
     logger: logging.Logger,
     limit: Optional[int] = None,
     batch_delay_ms: int = 100,
+    source_types: Optional[list[str]] = None,
 ) -> ExtractionStats:
     """Extract entities from all notes needing extraction.
 
     Incremental: only processes notes whose content_hash changed since last extraction.
+    source_types limits extraction to those sources, leaving other indexed roots
+    searchable but never sent to the LLM.
     Returns immutable stats object.
     """
-    notes = db.get_notes_needing_extraction()
+    notes = db.get_notes_needing_extraction(source_types=source_types)
     if limit:
         notes = notes[:limit]
 

@@ -119,6 +119,39 @@ claude mcp add root -- python server.py
 
 ---
 
+## Indexing More Than One Folder
+
+Most people start with one vault. Your knowledge usually is not in one place: there is the vault, and then there is the project docs folder, and the notes your coding agent writes, and the memory store some tool keeps in a dotfile directory.
+
+Add them as roots:
+
+```yaml
+vault:
+  path: "~/Documents/My Vault"
+
+  roots:
+    - name: project-docs
+      path: "~/code/myproject/docs"
+      extract: true
+    - name: agent-memory
+      path: "~/.config/agent/memory"
+      extract: false
+```
+
+Each root is indexed separately and keeps its own identity. `root_stats` breaks the counts out per root, `root_search` can filter to one of them, and each root's stale sweep only ever removes its own notes. If a root goes missing, say an external drive is unmounted, that root is skipped with a warning and its notes are left alone.
+
+`extract` is the part worth understanding, because it is where the money is.
+
+Indexing is free. It chunks your notes and embeds them with a local MiniLM model on your CPU, so a root becomes semantically searchable at zero cost. Entity extraction is the step that calls an LLM once per note to pull out people, projects and relationships for the graph.
+
+Those are now separate decisions. `extract: false` gives you a root you can search but never pay for. Point a large, repetitive, low-entity corpus at it and your bill does not move.
+
+A worked example from the author's own setup: 939 agent memory files went in with `extract: false`. Every one is searchable. The extraction queue went to 27 notes instead of 966.
+
+One detail if you already have an index: note paths are unique, and two folders can both contain `index.md`, so each extra root namespaces its paths with a prefix (its name, by default). The main `vault.path` keeps no prefix, which means adding roots never re-embeds the vault you already indexed.
+
+---
+
 ## Running Costs
 
 This is almost free to run. The initial setup costs a few dollars. After that, daily operation runs in the pennies  - because ROOT only reprocesses notes that have actually changed.

@@ -6,6 +6,7 @@ Supports incremental indexing via content hashing.
 """
 
 import logging
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -74,9 +75,53 @@ def _setup_logging(log_dir: str) -> logging.Logger:
     return logger
 
 
-def index_vault(config: dict, db: RootDB, embedder: Embedder, logger: logging.Logger) -> dict:
-    """Index all vault notes. Returns stats dict."""
+def configured_roots(config: dict) -> list[dict]:
+    """Normalise vault config into a list of roots.
+
+    Back-compatible: a scalar `vault.path` stays one root with source_type
+    "vault", no path prefix, extraction on. `vault.roots` adds more. Each root
+    carries its own source_type, so stale sweeps, stats and search filters stay
+    independent, and its own `extract` flag, so indexing a root does not commit
+    it to LLM entity extraction.
+    """
     vault_config = config["vault"]
+    roots: list[dict] = []
+
+    if vault_config.get("path"):
+        roots.append({
+            "path": os.path.expanduser(vault_config["path"]),
+            "source_type": "vault",
+            "prefix": "",
+            "extract": vault_config.get("extract", True),
+            "exclude_folders": vault_config.get("exclude_folders"),
+            "exclude_patterns": vault_config.get("exclude_patterns"),
+        })
+
+    for entry in vault_config.get("roots") or []:
+        source_type = entry.get("source_type") or entry["name"]
+        roots.append({
+            "path": os.path.expanduser(entry["path"]),
+            "source_type": source_type,
+            # Paths are UNIQUE in `notes`, and two roots can both hold
+            # `index.md`. The prefix keeps them distinct. The primary vault root
+            # keeps an empty prefix so an existing index is not orphaned and
+            # re-embedded when you add a second root.
+            "prefix": entry.get("prefix", source_type),
+            "extract": entry.get("extract", False),
+            "exclude_folders": entry.get("exclude_folders"),
+            "exclude_patterns": entry.get("exclude_patterns"),
+        })
+
+    return roots
+
+
+def extraction_source_types(config: dict) -> list[str]:
+    """Source types whose notes may be sent to the LLM for entity extraction."""
+    return [r["source_type"] for r in configured_roots(config) if r["extract"]]
+
+
+def index_vault(config: dict, db: RootDB, embedder: Embedder, logger: logging.Logger) -> dict:
+    """Index every configured root. Returns stats dict."""
     now = datetime.now(timezone.utc).isoformat()
 
     stats = {
@@ -88,70 +133,93 @@ def index_vault(config: dict, db: RootDB, embedder: Embedder, logger: logging.Lo
 
     # Collect all notes for batch embedding
     notes_to_embed = []
-    all_paths = set()
 
-    logger.info(f"Scanning vault: {vault_config['path']}")
+    for root in configured_roots(config):
+        source_type = root["source_type"]
+        prefix = root["prefix"]
+        root_stats = {"scanned": 0, "skipped_thin": 0}
+        root_paths: set[str] = set()
 
-    for note in scan_vault(
-        vault_config["path"],
-        exclude_folders=vault_config.get("exclude_folders"),
-        exclude_patterns=vault_config.get("exclude_patterns"),
-    ):
-        stats["scanned"] += 1
+        logger.info(f"Scanning {source_type}: {root['path']}")
 
-        # Navigation-only notes are excluded from the index. Deliberately left
-        # out of all_paths, so any already indexed get dropped by the stale
-        # sweep below.
-        if min_prose and prose_length(note["content"]) < min_prose:
-            stats["skipped_thin"] += 1
-            continue
+        try:
+            for note in scan_vault(
+                root["path"],
+                exclude_folders=root["exclude_folders"],
+                exclude_patterns=root["exclude_patterns"],
+            ):
+                root_stats["scanned"] += 1
+                path = f"{prefix}/{note['path']}" if prefix else note["path"]
 
-        all_paths.add(note["path"])
+                # Navigation-only notes are excluded from the index.
+                # Deliberately left out of root_paths, so any already indexed
+                # get dropped by the stale sweep below.
+                if min_prose and prose_length(note["content"]) < min_prose:
+                    root_stats["skipped_thin"] += 1
+                    continue
 
-        # Check if content changed
-        stored_hash = db.get_note_hash(note["path"])
-        if stored_hash == note["content_hash"]:
-            stats["unchanged"] += 1
-            continue
+                root_paths.add(path)
 
-        if stored_hash is None:
-            stats["new"] += 1
-        else:
-            stats["updated"] += 1
+                # Check if content changed
+                stored_hash = db.get_note_hash(path)
+                if stored_hash == note["content_hash"]:
+                    stats["unchanged"] += 1
+                    continue
 
-        notes_to_embed.append({**note, "indexed_at": now})
+                if stored_hash is None:
+                    stats["new"] += 1
+                else:
+                    stats["updated"] += 1
 
-    # Safety guard: if scan returned 0 results but DB has vault notes, abort
-    # This prevents accidental purge when vault path is inaccessible
-    if stats["scanned"] == 0:
-        existing_vault_count = db.count_notes_by_source("vault")
-        if existing_vault_count > 0:
+                notes_to_embed.append({
+                    **note,
+                    "path": path,
+                    "source_type": source_type,
+                    "indexed_at": now,
+                })
+        except (FileNotFoundError, OSError) as e:
+            # An unreachable root must not take the run down, and must not let
+            # its own notes be swept. Skip its sweep and carry on.
             logger.error(
-                f"SAFETY ABORT: Vault scan returned 0 notes but DB has {existing_vault_count} vault notes. "
-                f"Vault path may be inaccessible. Skipping stale removal to prevent data loss."
+                f"SAFETY SKIP: root '{source_type}' unreadable ({e}). Leaving its notes untouched."
             )
-            stats["stale_removed"] = 0
-            return stats
+            stats["errors"] += 1
+            continue
 
-    # Circuit breaker: a threshold that rejects a quarter of the vault is
-    # misconfigured, not a discovery. Keep the existing index rather than let an
-    # unattended run purge it.
-    if stats["scanned"] and stats["skipped_thin"] > THIN_SKIP_ABORT_FRACTION * stats["scanned"]:
-        logger.error(
-            f"SAFETY ABORT: min_prose_chars={min_prose} skipped {stats['skipped_thin']} of "
-            f"{stats['scanned']} notes ({stats['skipped_thin'] / stats['scanned']:.0%}). "
-            f"Threshold looks wrong. Skipping stale removal to prevent data loss."
-        )
-        return stats
+        stats["scanned"] += root_stats["scanned"]
+        stats["skipped_thin"] += root_stats["skipped_thin"]
 
-    if stats["skipped_thin"]:
-        logger.info(
-            f"Skipped {stats['skipped_thin']} navigation-only notes "
-            f"(under {min_prose} chars of prose)."
-        )
+        # Safety guard, per root: a scan returning nothing where the DB holds
+        # notes means the path is inaccessible, not that the notes are gone.
+        if root_stats["scanned"] == 0:
+            existing = db.count_notes_by_source(source_type)
+            if existing > 0:
+                logger.error(
+                    f"SAFETY ABORT: {source_type} scan returned 0 notes but DB has {existing}. "
+                    f"Path may be inaccessible. Skipping stale removal for this root."
+                )
+                continue
 
-    # Remove notes that no longer exist in vault, plus any now-skipped thin notes
-    stats["stale_removed"] = db.remove_stale_notes(all_paths)
+        # Circuit breaker, per root: a threshold that rejects a quarter of a
+        # root is misconfigured, not a discovery. Keep the existing index rather
+        # than let an unattended run purge it.
+        if root_stats["scanned"] and root_stats["skipped_thin"] > THIN_SKIP_ABORT_FRACTION * root_stats["scanned"]:
+            logger.error(
+                f"SAFETY ABORT: min_prose_chars={min_prose} skipped {root_stats['skipped_thin']} of "
+                f"{root_stats['scanned']} {source_type} notes "
+                f"({root_stats['skipped_thin'] / root_stats['scanned']:.0%}). "
+                f"Threshold looks wrong. Skipping stale removal for this root."
+            )
+            continue
+
+        if root_stats["skipped_thin"]:
+            logger.info(
+                f"Skipped {root_stats['skipped_thin']} navigation-only {source_type} notes "
+                f"(under {min_prose} chars of prose)."
+            )
+
+        # Remove notes that no longer exist in this root, plus any now-skipped thin notes
+        stats["stale_removed"] += db.remove_stale_notes(root_paths, source_type=source_type)
 
     if not notes_to_embed:
         logger.info(f"No changes detected. {stats['scanned']} notes scanned, all up to date.")
@@ -195,7 +263,7 @@ def index_vault(config: dict, db: RootDB, embedder: Embedder, logger: logging.Lo
                 content=note["content"],
                 content_hash=note["content_hash"],
                 folder=note["folder"],
-                source_type="vault",
+                source_type=note.get("source_type", "vault"),
                 created_at=note.get("created_at"),
                 indexed_at=note["indexed_at"],
             )
@@ -237,7 +305,15 @@ def run_extraction(config: dict, db: RootDB, logger: logging.Logger, limit: int 
     )
     batch_delay = llm_config.get("batch_delay_ms", 100)
 
-    stats = extract_all(db, llm, logger, limit=limit, batch_delay_ms=batch_delay)
+    # Only roots with extract: true reach the LLM. Indexing a root is free
+    # (local embeddings); extracting it is not, so the two are separate choices.
+    source_types = extraction_source_types(config)
+    logger.info(f"Extraction sources: {', '.join(source_types) or '(none)'}")
+
+    stats = extract_all(
+        db, llm, logger, limit=limit, batch_delay_ms=batch_delay,
+        source_types=source_types,
+    )
     logger.info(
         f"Extraction: {stats.processed} processed, {stats.entities_found} entities, "
         f"{stats.relations_found} relations, {stats.errors} errors"
