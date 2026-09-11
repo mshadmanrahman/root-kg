@@ -2,7 +2,7 @@
 ROOT CLI Query — callable by OpenClaw agents via exec.
 
 Usage:
-    python query.py <tool> [args...]
+    python -m root_kg.query <tool> [args...]
 
 Tools:
     open_loops [scope]          — Unresolved action items (scope: all|meetings|vault)

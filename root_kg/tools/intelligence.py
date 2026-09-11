@@ -35,7 +35,7 @@ def ask(
     if not context.strip():
         return (
             f"I don't have enough information to answer: '{question}'\n\n"
-            "Try ingesting more content with `root_ingest` or re-indexing with `python indexer.py`."
+            "Try ingesting more content with `root_ingest` or re-indexing with `root-index`."
         )
 
     # 4. LLM synthesis

@@ -1,5 +1,5 @@
 # ROOT Configuration
-# Copy to config.yaml and edit, or run: python -m root init
+# Copy to config.yaml and edit, or run: root-kg init
 
 vault:
   # Path to your Obsidian vault (or any folder of markdown files)
@@ -51,7 +51,7 @@ indexer:
   # headings, embeds and links. Navigation-only notes (a title plus a file embed
   # plus prev/next links) embed as near-identical tag soup and crowd out real
   # answers for any query in the same vocabulary. Set 0 to index everything.
-  # Preview before changing: python indexer.py --report-thin --min-prose N
+  # Preview before changing: root-index --report-thin --min-prose N
   min_prose_chars: 30
 
 llm:
