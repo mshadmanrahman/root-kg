@@ -5,10 +5,10 @@ Free-form Q&A combining semantic search, entity graph, and LLM synthesis.
 Weekly digest assembling recent activity across all sources.
 """
 
-from db import RootDB
-from embeddings import Embedder
-from llm import LLMClient
-from tools.search import semantic_search
+from root_kg.db import RootDB
+from root_kg.embeddings import Embedder
+from root_kg.llm import LLMClient
+from root_kg.tools.search import semantic_search
 
 
 def ask(
@@ -35,7 +35,7 @@ def ask(
     if not context.strip():
         return (
             f"I don't have enough information to answer: '{question}'\n\n"
-            "Try ingesting more content with `root_ingest` or re-indexing with `python indexer.py`."
+            "Try ingesting more content with `root_ingest` or re-indexing with `root-index`."
         )
 
     # 4. LLM synthesis

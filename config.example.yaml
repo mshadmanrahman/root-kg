@@ -1,5 +1,5 @@
 # ROOT Configuration
-# Copy to config.yaml and edit, or run: python -m root init
+# Copy to config.yaml and edit, or run: root-kg init
 
 vault:
   # Path to your Obsidian vault (or any folder of markdown files)
@@ -38,8 +38,8 @@ vault:
 embeddings:
   # Local model, free, runs on CPU. No API key needed.
   model: "all-MiniLM-L6-v2"
-  max_chunk_tokens: 2000
-  split_on_headings: true
+  # Long notes split at headings into chunks of at most this many characters
+  max_chunk_chars: 4000
 
 database:
   path: "data/root.db"
@@ -51,7 +51,7 @@ indexer:
   # headings, embeds and links. Navigation-only notes (a title plus a file embed
   # plus prev/next links) embed as near-identical tag soup and crowd out real
   # answers for any query in the same vocabulary. Set 0 to index everything.
-  # Preview before changing: python indexer.py --report-thin --min-prose N
+  # Preview before changing: root-index --report-thin --min-prose N
   min_prose_chars: 30
 
 llm:
@@ -61,6 +61,6 @@ llm:
   #   "ollama" - Local LLM via Ollama (free, no API key needed)
   backend: "anthropic"
   extraction_model: "claude-haiku-4-5-20251001"
-  synthesis_model: "claude-sonnet-4-20250514"
+  synthesis_model: "claude-sonnet-5"
   max_content_chars: 6000
   batch_delay_ms: 100

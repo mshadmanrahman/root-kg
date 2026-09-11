@@ -30,4 +30,4 @@ if [[ -z "${ANTHROPIC_API_KEY:-}" || "${ANTHROPIC_API_KEY}" == ROTATE_ME* ]]; th
     exit 1
 fi
 
-exec "$PYTHON" indexer.py --extract
+exec "$PYTHON" -m root_kg.indexer --extract

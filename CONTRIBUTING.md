@@ -25,11 +25,11 @@ The test suite runs against a temporary SQLite database and mocks every LLM call
 
 ## Adding an MCP tool
 
-Tools live in `tools/` grouped by kind (search, graph, patterns, correlations, intelligence). Register the tool in `server.py` in both `list_tools` and `call_tool`, and update the tool count in `README.md` if it changes.
+Tools live in `root_kg/tools/` grouped by kind (search, graph, patterns, correlations, intelligence). Register the tool in `root_kg/server.py` in both `list_tools` and `call_tool`, and update the tool count in `README.md` if it changes.
 
 ## Adding a source adapter
 
-`adapters/vault.py` walks a folder of markdown files. A new adapter should produce the same note shape (path, title, body, frontmatter, modified time) so the indexer, chunker and extractor stay untouched.
+`root_kg/adapters/vault.py` walks a folder of markdown files. A new adapter should produce the same note shape (path, title, body, frontmatter, modified time) so the indexer, chunker and extractor stay untouched.
 
 ## Reporting a bug
 

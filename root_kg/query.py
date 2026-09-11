@@ -2,7 +2,7 @@
 ROOT CLI Query — callable by OpenClaw agents via exec.
 
 Usage:
-    python query.py <tool> [args...]
+    python -m root_kg.query <tool> [args...]
 
 Tools:
     open_loops [scope]          — Unresolved action items (scope: all|meetings|vault)
@@ -17,12 +17,10 @@ Tools:
 import logging
 import sys
 import time
-from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parent
-sys.path.insert(0, str(PROJECT_ROOT))
+from root_kg.paths import PROJECT_ROOT
 
-from db import RootDB
+from root_kg.db import RootDB
 
 # Tools that need embeddings vs pure-SQL tools
 _EMBEDDING_TOOLS = {"open_loops", "themes", "decision_trail", "project_pulse", "search"}
@@ -37,7 +35,7 @@ logger = logging.getLogger("root.query")
 
 def _get_embedder():
     """Lazy-load embedder only when needed."""
-    from embeddings import Embedder
+    from root_kg.embeddings import Embedder
     return Embedder()
 
 
@@ -62,12 +60,12 @@ def main() -> None:
             logger.info("embedder loaded in %.1fs", time.time() - start)
 
         if tool == "open_loops":
-            from tools.correlations import open_loops
+            from root_kg.tools.correlations import open_loops
             scope = args[0] if args else "all"
             print(open_loops(db, embedder, scope=scope))
 
         elif tool == "themes":
-            from tools.patterns import discover_themes
+            from root_kg.tools.patterns import discover_themes
             scope = args[0] if args else "all"
             themes = discover_themes(db, embedder, scope=scope)
             for t in themes:
@@ -80,32 +78,32 @@ def main() -> None:
                 print()
 
         elif tool == "blind_spots":
-            from tools.graph import blind_spots
+            from root_kg.tools.graph import blind_spots
             print(blind_spots(db))
 
         elif tool == "weekly_digest":
-            from tools.intelligence import weekly_digest
+            from root_kg.tools.intelligence import weekly_digest
             print(weekly_digest(db))
 
         elif tool == "decision_trail":
             if not args:
                 print("Usage: query.py decision_trail <topic>")
                 sys.exit(1)
-            from tools.graph import decision_trail
+            from root_kg.tools.graph import decision_trail
             print(decision_trail(" ".join(args), db, embedder))
 
         elif tool == "project_pulse":
             if not args:
                 print("Usage: query.py project_pulse <project>")
                 sys.exit(1)
-            from tools.correlations import project_pulse
+            from root_kg.tools.correlations import project_pulse
             print(project_pulse(" ".join(args), db, embedder))
 
         elif tool == "search":
             if not args:
                 print("Usage: query.py search <query>")
                 sys.exit(1)
-            from tools.search import semantic_search
+            from root_kg.tools.search import semantic_search
             print(semantic_search(" ".join(args), db, embedder))
 
         else:

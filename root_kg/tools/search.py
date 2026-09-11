@@ -7,8 +7,8 @@ Recency-boosted: recent notes rank higher when semantic similarity is close.
 
 from datetime import datetime, timezone
 
-from db import RootDB
-from embeddings import Embedder
+from root_kg.db import RootDB
+from root_kg.embeddings import Embedder
 
 # Recency decay: how much to penalize older notes.
 # 0.002 per day means a 30-day-old note gets ~6% penalty, 180-day-old ~36%.

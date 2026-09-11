@@ -9,7 +9,6 @@ Fallback: OpenRouter (free $1 credit).
 import json
 import os
 import subprocess
-from pathlib import Path
 from typing import Optional
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
@@ -29,7 +28,9 @@ _NESTED_CLAUDE_ENV_STRIP = (
 )
 
 # Load .env file if present (no dependency on python-dotenv)
-_env_path = Path(__file__).parent / ".env"
+from root_kg.paths import PROJECT_ROOT
+
+_env_path = PROJECT_ROOT / ".env"
 if _env_path.exists():
     for line in _env_path.read_text().strip().splitlines():
         line = line.strip()
@@ -159,7 +160,7 @@ class LLMClient:
             self.api_key = os.environ.get("ANTHROPIC_API_KEY", "")
             self.base_url = "https://api.anthropic.com/v1/messages"
             self.extraction_model = extraction_model or "claude-haiku-4-5-20251001"
-            self.synthesis_model = synthesis_model or "claude-sonnet-4-20250514"
+            self.synthesis_model = synthesis_model or "claude-sonnet-5"
         elif backend == "openrouter":
             self.api_key = os.environ.get("OPENROUTER_API_KEY", "")
             self.base_url = "https://openrouter.ai/api/v1/chat/completions"

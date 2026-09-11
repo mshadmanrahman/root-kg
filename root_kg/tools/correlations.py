@@ -7,9 +7,9 @@ across all indexed sources (vault, meetings, email, Slack).
 
 from collections import defaultdict
 
-from db import RootDB
-from embeddings import Embedder
-from tools.search import semantic_search
+from root_kg.db import RootDB
+from root_kg.embeddings import Embedder
+from root_kg.tools.search import semantic_search
 
 
 def about_person(

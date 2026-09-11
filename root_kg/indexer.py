@@ -13,10 +13,11 @@ from pathlib import Path
 
 import yaml
 
-from adapters.vault import scan_vault
-from chunker import chunk_note
-from db import RootDB
-from embeddings import Embedder
+from root_kg.adapters.vault import scan_vault
+from root_kg.paths import PROJECT_ROOT
+from root_kg.chunker import chunk_note, chunk_size
+from root_kg.db import RootDB
+from root_kg.embeddings import Embedder
 
 
 # A note whose body is only navigation (frontmatter tags, a title, a file embed,
@@ -130,6 +131,7 @@ def index_vault(config: dict, db: RootDB, embedder: Embedder, logger: logging.Lo
     }
 
     min_prose = config.get("indexer", {}).get("min_prose_chars", DEFAULT_MIN_PROSE_CHARS)
+    max_chars = chunk_size(config)
 
     # Collect all notes for batch embedding
     notes_to_embed = []
@@ -234,7 +236,7 @@ def index_vault(config: dict, db: RootDB, embedder: Embedder, logger: logging.Lo
     chunk_map = []  # Track which chunks belong to which note
 
     for note in notes_to_embed:
-        chunks = chunk_note(note["content"], note["title"])
+        chunks = chunk_note(note["content"], note["title"], max_chars=max_chars)
         chunk_map.append({"note": note, "chunk_count": len(chunks)})
         all_chunks.extend(chunks)
 
@@ -294,8 +296,8 @@ def index_vault(config: dict, db: RootDB, embedder: Embedder, logger: logging.Lo
 
 def run_extraction(config: dict, db: RootDB, logger: logging.Logger, limit: int | None = None) -> dict:
     """Run entity extraction on notes that need it. Returns stats dict."""
-    from extractor import extract_all
-    from llm import LLMClient
+    from root_kg.extractor import extract_all
+    from root_kg.llm import LLMClient
 
     llm_config = config.get("llm", {})
     llm = LLMClient(
@@ -384,7 +386,7 @@ def main():
     )
     args = parser.parse_args()
 
-    project_root = Path(__file__).parent
+    project_root = PROJECT_ROOT
     config_path = project_root / "config.yaml"
 
     with open(config_path) as f:
