@@ -1,4 +1,5 @@
 <p align="center">
+  <a href="https://pypi.org/project/root-kg/"><img src="https://img.shields.io/pypi/v/root-kg?style=flat-square&color=blue" alt="PyPI"></a>
   <img src="https://img.shields.io/badge/python-3.11+-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License">
   <img src="https://img.shields.io/badge/MCP-native-purple?style=flat-square" alt="MCP Native">
@@ -133,6 +134,7 @@ root-kg/
 │   ├── cli.py             # Setup wizard, stats, and cron-callable search and note ingest
 │   ├── paths.py           # Where config, data and logs live: ROOT_KG_HOME, the checkout, or ~/.root-kg
 │   ├── config.example.yaml  # Template that root-kg init copies into config.yaml
+│   ├── .env.example       # Template that root-kg init copies into .env
 │   ├── query.py           # Calls any ROOT tool from a shell or another agent
 │   ├── rootd.py           # Warm daemon: keeps DB and embedder loaded for fast local search
 │   ├── merge_cli.py       # Folds duplicate entity shards into one canonical entity
@@ -140,6 +142,7 @@ root-kg/
 │   └── tools/             # search, patterns, correlations, graph, intelligence
 ├── tests/                 # 70 tests over the DB, extractor and multi-root paths
 ├── templates/root-instructions.md  # Drop-in usage instructions for an agent
+├── .github/workflows/     # tests.yml runs pytest on every PR, release.yml publishes to PyPI on a v* tag
 └── run-indexer.sh         # Wrapper that activates the venv and runs an incremental pass
 ```
 
