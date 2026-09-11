@@ -23,7 +23,8 @@ classifiers = [
 dependencies = [
     "sentence-transformers>=3.0.0",
     "sqlite-vec>=0.1.1",
-    "mcp>=1.0.0",
+    # 2.x removed the low-level Server decorators that root_kg/server.py uses
+    "mcp>=1.0.0,<2",
     "pyyaml>=6.0",
 ]
 
@@ -49,3 +50,8 @@ build-backend = "setuptools.build_meta"
 # layout with more than one top-level package).
 [tool.setuptools.packages.find]
 include = ["root_kg*"]
+
+# Setup templates that `root-kg init` copies. They live in the package so a
+# PyPI install has them; a checkout reads the same files.
+[tool.setuptools.package-data]
+root_kg = ["config.example.yaml", ".env.example"]
