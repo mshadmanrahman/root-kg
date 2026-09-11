@@ -1,6 +1,6 @@
 [project]
 name = "root-kg"
-version = "1.2.0"
+version = "1.2.1"
 description = "Personal knowledge graph with entity extraction, GraphRAG, and MCP integration. Turns your notes into searchable intelligence."
 readme = "README.md"
 license = {text = "MIT"}
@@ -35,8 +35,30 @@ Issues = "https://github.com/mshadmanrahman/root-kg/issues"
 [project.scripts]
 root-kg = "cli:main"
 root-index = "indexer:main"
-root-server = "server:main"
+root-server = "server:run"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
 
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
+
+# Flat layout: the modules live at the repo root, so tell setuptools exactly
+# what to ship instead of letting it guess (auto-discovery refuses a flat
+# layout with more than one top-level package).
+[tool.setuptools]
+py-modules = [
+    "cli",
+    "indexer",
+    "server",
+    "db",
+    "extractor",
+    "llm",
+    "embeddings",
+    "chunker",
+    "query",
+    "rootd",
+    "merge_cli",
+]
+packages = ["adapters", "tools"]

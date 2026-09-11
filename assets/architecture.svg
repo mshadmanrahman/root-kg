@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" width="100%" role="img" aria-labelledby="rootArchTitle rootArchDesc">
+  <title id="rootArchTitle">ROOT architecture</title>
+  <desc id="rootArchDesc">Sources are indexed by indexer.py into a SQLite database with sqlite-vec, which server.py exposes to Claude Code as 18 root_ MCP tools.</desc>
+
+  <defs>
+    <marker id="arrowInk" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#333333"/>
+    </marker>
+    <marker id="arrowAccent" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#D9553B"/>
+    </marker>
+  </defs>
+
+  <style>
+    .p  { fill:#FAFAFA }
+    .bx { fill:none; stroke:#333333; stroke-width:1.5 }
+    .ar { fill:none; stroke:#333333; stroke-width:1.25 }
+    .acc{ fill:none; stroke:#D9553B; stroke-width:1.25 }
+    text { font-family:Manrope, Inter, -apple-system, Segoe UI, Helvetica, Arial, sans-serif }
+    .st { font-size:15px; font-weight:800; fill:#333333; letter-spacing:0.09em }
+    .lb { font-size:12px; font-weight:500; fill:#333333 }
+    .mu { font-size:11px; font-weight:500; fill:#727272 }
+    .ac { font-size:11px; font-weight:500; fill:#333333 }
+  </style>
+
+  <rect x="0" y="0" width="1200" height="520" class="p"/>
+
+  <!-- ============ stage titles ============ -->
+  <text class="st" x="40"  y="100">SOURCES</text>
+  <text class="mu" x="40"  y="120">notes.source_type</text>
+  <text class="st" x="270" y="100">INDEXER</text>
+  <text class="mu" x="270" y="120">indexer.py</text>
+  <text class="st" x="580" y="100">STORE</text>
+  <text class="mu" x="580" y="120">db.py</text>
+  <text class="st" x="820" y="100">MCP SERVER</text>
+  <text class="mu" x="820" y="120">server.py, 18 tools</text>
+
+  <!-- ============ 1. sources ============ -->
+  <rect class="bx" x="40" y="170" width="170" height="58" rx="2"/>
+  <text class="lb" x="56" y="194">vault</text>
+  <text class="mu" x="56" y="212">Obsidian markdown</text>
+
+  <rect class="bx" x="40" y="248" width="170" height="58" rx="2"/>
+  <text class="lb" x="56" y="272">granola</text>
+  <text class="mu" x="56" y="290">meeting transcripts</text>
+
+  <rect class="bx" x="40" y="326" width="170" height="58" rx="2"/>
+  <text class="lb" x="56" y="350">gmail, slack</text>
+  <text class="mu" x="56" y="368">via root_ingest</text>
+
+  <path class="ar" d="M214 277 L240 277 L240 173 L262 173" marker-end="url(#arrowInk)"/>
+
+  <!-- ============ 2. indexer ============ -->
+  <rect class="bx" x="270" y="146" width="250" height="54" rx="2"/>
+  <text class="lb" x="284" y="170">scan_vault()</text>
+  <text class="mu" x="284" y="188">walks each configured root</text>
+
+  <rect class="bx" x="270" y="216" width="250" height="54" rx="2"/>
+  <text class="lb" x="284" y="240">chunk_note()</text>
+  <text class="mu" x="284" y="258">splits at ## headings, 4000 chars</text>
+
+  <rect class="bx" x="270" y="286" width="250" height="54" rx="2"/>
+  <text class="lb" x="284" y="310">Embedder.embed_batch()</text>
+  <text class="mu" x="284" y="328">all-MiniLM-L6-v2, 384 dims, CPU</text>
+
+  <rect class="bx" x="270" y="356" width="250" height="68" rx="2"/>
+  <text class="lb" x="284" y="380">extract_all()</text>
+  <text class="mu" x="284" y="398">claude-haiku-4-5-20251001</text>
+  <text class="mu" x="284" y="416">opt-in per root: extract: true</text>
+
+  <path class="ar" d="M524 313 L572 313" marker-end="url(#arrowInk)"/>
+  <path class="ar" d="M524 390 L572 390" marker-end="url(#arrowInk)"/>
+
+  <!-- ============ 3. store ============ -->
+  <path class="bx" d="M580 170 L580 400"/>
+  <path class="bx" d="M770 170 L770 400"/>
+  <path class="bx" d="M580 400 A95 20 0 0 0 770 400"/>
+  <ellipse class="bx" cx="675" cy="170" rx="95" ry="20"/>
+
+  <text class="lb" x="600" y="200">SQLite + sqlite-vec</text>
+  <text class="mu" x="600" y="218">data/root.db</text>
+
+  <text class="mu" x="600" y="246">notes</text>
+  <text class="mu" x="600" y="263">chunks</text>
+  <text class="mu" x="600" y="280">chunks_vec (vec0, 384)</text>
+  <text class="mu" x="600" y="297">entities</text>
+  <text class="mu" x="600" y="314">entity_aliases</text>
+  <text class="mu" x="600" y="331">relations</text>
+  <text class="mu" x="600" y="348">entity_note_links</text>
+  <text class="mu" x="600" y="365">entity_extractions</text>
+
+  <path class="ar" d="M772 285 L812 285" marker-end="url(#arrowInk)"/>
+
+  <!-- ============ 4. mcp server ============ -->
+  <rect class="bx" x="820" y="150" width="320" height="274" rx="2"/>
+
+  <rect class="bx" x="838" y="168" width="284" height="50" rx="2"/>
+  <text class="lb" x="852" y="190">Search &amp; discovery, 7</text>
+  <text class="mu" x="852" y="208">root_search, root_note, root_themes</text>
+
+  <rect class="bx" x="838" y="232" width="284" height="50" rx="2"/>
+  <text class="lb" x="852" y="254">Ingest, 2</text>
+  <text class="mu" x="852" y="272">root_ingest, root_ingest_batch</text>
+
+  <rect class="bx" x="838" y="296" width="284" height="50" rx="2"/>
+  <text class="lb" x="852" y="318">Entity graph, 4</text>
+  <text class="mu" x="852" y="336">root_graph, root_decision_trail</text>
+
+  <rect class="bx" x="838" y="360" width="284" height="50" rx="2"/>
+  <text class="lb" x="852" y="382">Intelligence, 5</text>
+  <text class="mu" x="852" y="400">root_ask, root_weekly_digest</text>
+
+  <!-- ============ client + question/answer path ============ -->
+  <rect class="bx" x="40" y="436" width="210" height="56" rx="2"/>
+  <text class="lb" x="56" y="460">Claude Code</text>
+  <text class="mu" x="56" y="478">MCP client</text>
+
+  <path class="acc" d="M250 452 L930 452 L930 428" marker-end="url(#arrowAccent)"/>
+  <text class="ac" x="300" y="445">root_ask question</text>
+
+  <path class="acc" d="M1060 426 L1060 478 L256 478" marker-end="url(#arrowAccent)"/>
+  <text class="ac" x="300" y="496">llm.synthesize(), claude-sonnet-4-20250514</text>
+</svg>

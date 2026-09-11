@@ -5,8 +5,8 @@ Setup wizard, management commands, and cron-callable search/ingest
 for the personal knowledge graph.
 
 Usage (cron-safe):
-    python cli.py search --query "morning digest signals" [--limit 5]
-    python cli.py note --content "Musa pulse: ..." [--tags "musa,signal"]
+    root-kg search --query "morning digest signals" [--limit 5]
+    root-kg note --content "Musa pulse: ..." [--tags "musa,signal"]
 
 Exit codes: 0 = success, 1 = error. Errors go to stderr, results to stdout.
 """
@@ -225,7 +225,7 @@ def stats():
 def _load_config() -> dict:
     """Load config.yaml. Exits with error if missing."""
     if not CONFIG_PATH.exists():
-        print("Error: config.yaml not found. Run: python cli.py init", file=sys.stderr)
+        print("Error: config.yaml not found. Run: root-kg init", file=sys.stderr)
         sys.exit(1)
     with open(CONFIG_PATH) as f:
         return yaml.safe_load(f)
@@ -331,7 +331,7 @@ def note(content: str, tags: list[str] | None = None) -> None:
 def main():
     """CLI entry point."""
     if len(sys.argv) < 2:
-        print("Usage: python cli.py <command>")
+        print("Usage: root-kg <command>")
         print("Commands: init, stats, index, extract, search, note")
         return
 
@@ -351,14 +351,14 @@ def main():
         index_main()
     elif command == "search":
         import argparse
-        parser = argparse.ArgumentParser(prog="cli.py search")
+        parser = argparse.ArgumentParser(prog="root-kg search")
         parser.add_argument("--query", required=True, help="Natural language search query")
         parser.add_argument("--limit", type=int, default=5, help="Max results (default 5)")
         args = parser.parse_args(sys.argv[2:])
         search(query=args.query, limit=args.limit)
     elif command == "note":
         import argparse
-        parser = argparse.ArgumentParser(prog="cli.py note")
+        parser = argparse.ArgumentParser(prog="root-kg note")
         parser.add_argument("--content", required=True, help="Plain text note content")
         parser.add_argument("--tags", default="", help="Comma-separated tags (optional)")
         args = parser.parse_args(sys.argv[2:])

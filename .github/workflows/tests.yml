@@ -1,0 +1,25 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install CPU-only torch first so sentence-transformers stays small
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Install ROOT with dev extras
+        run: pip install -e ".[dev]"
+      - name: Run tests
+        run: pytest -q

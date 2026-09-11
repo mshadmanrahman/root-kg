@@ -609,6 +609,11 @@ async def main():
         await app.run(read_stream, write_stream, app.create_initialization_options())
 
 
-if __name__ == "__main__":
+def run():
+    """Synchronous entry point for the `root-server` console script."""
     import asyncio
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    run()

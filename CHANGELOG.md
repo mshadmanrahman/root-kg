@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [1.2.1] - 2026-09-11
+
+### Fixed
+
+- **`pip install -e .` works on a fresh clone.** setuptools refused the flat layout ("multiple top-level packages discovered"). `pyproject.toml` now lists the modules and packages explicitly, and `root-server` points at a synchronous entry point so the console script actually starts the server.
+- **Quick Start matched the code.** The README told you to run `python -m root init`, which never existed. The documented commands are now `root-kg init`, `root-index` and `root-server`, the console scripts `pip install` creates.
+
+### Changed
+
+- README rewritten install-first, with a drawn architecture diagram and a letterpress hero in place of the generated images.
+- `pytest` is a `dev` extra: `pip install -e ".[dev]"`.
+
+### Removed
+
+- Owner-specific scripts that only ran inside the maintainer's private workspace (Slack alerting, a workspace health check, a skill-usage audit), a personal launchd plist, and an installer manifest for an unrelated tool.
+
+### Added
+
+- `CONTRIBUTING.md`, issue templates, and a GitHub Actions workflow that runs the test suite on Python 3.11 and 3.12.
+
 ## [1.2.0] — 2026-09-07
 
 ### Added
