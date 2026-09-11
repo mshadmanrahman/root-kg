@@ -41,11 +41,11 @@
   <text class="mu" x="56" y="212">Obsidian markdown</text>
 
   <rect class="bx" x="40" y="248" width="170" height="58" rx="2"/>
-  <text class="lb" x="56" y="272">granola</text>
-  <text class="mu" x="56" y="290">meeting transcripts</text>
+  <text class="lb" x="56" y="272">meetings</text>
+  <text class="mu" x="56" y="290">transcripts, notes</text>
 
   <rect class="bx" x="40" y="326" width="170" height="58" rx="2"/>
-  <text class="lb" x="56" y="350">gmail, slack</text>
+  <text class="lb" x="56" y="350">email, chat</text>
   <text class="mu" x="56" y="368">via root_ingest</text>
 
   <path class="ar" d="M214 277 L240 277 L240 173 L262 173" marker-end="url(#arrowInk)"/>

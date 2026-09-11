@@ -12,7 +12,7 @@ pip install -e ".[dev]"
 pytest
 ```
 
-The test suite runs against a temporary SQLite database and mocks every LLM call, so it needs no API key. The first run downloads the local embedding model once.
+The test suite runs against a temporary SQLite database and mocks every LLM call, so it needs no API key and does not download the embedding model.
 
 ## Before you open a pull request
 

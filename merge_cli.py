@@ -7,8 +7,8 @@ SAFE db.merge_entities() for each loser inside its own transaction, runs an
 integrity_check, and restarts the daemons.
 
 Usage:
-  python merge_cli.py --keep "Ric Prestage" --merge "Ric" "Rick"          # dry-run
-  python merge_cli.py --keep "Ric Prestage" --merge "Ric" "Rick" --execute
+  python merge_cli.py --keep "Alex Chen" --merge "Alex" "A. Chen"          # dry-run
+  python merge_cli.py --keep "Alex Chen" --merge "Alex" "A. Chen" --execute
   python merge_cli.py --keep 4009 --merge 53 --execute                    # by id
 
 Names are resolved case-insensitively against entity names; if a name matches

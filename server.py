@@ -201,7 +201,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "person": {"type": "string", "description": "Person's name (e.g., 'Ric', 'Sebastian', 'Fredrik')"},
+                    "person": {"type": "string", "description": "Person's name (e.g., 'Maya', 'Alex Chen')"},
                     "limit": {"type": "integer", "description": "Max results per source (default 5)", "default": 5},
                 },
                 "required": ["person"],
@@ -295,7 +295,7 @@ async def list_tools() -> list[Tool]:
     ]
 
 
-_USAGE_LOG = Path(__file__).resolve().parent.parent / "agent-state" / ".cost" / "root_mcp_usage.jsonl"
+_USAGE_LOG = Path(__file__).resolve().parent / "data" / "root_mcp_usage.jsonl"
 
 
 def _log_usage(name: str, arguments: dict) -> None:
