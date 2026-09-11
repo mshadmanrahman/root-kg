@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import CallToolResult, ListToolsResult, TextContent, Tool
 
 from root_kg.db import RootDB
 from root_kg.embeddings import Embedder
@@ -67,11 +67,6 @@ def get_llm() -> LLMClient:
     return _llm
 
 
-# Create MCP server
-app = Server("root")
-
-
-@app.list_tools()
 async def list_tools() -> list[Tool]:
     return [
         Tool(
@@ -318,7 +313,6 @@ def _log_usage(name: str, arguments: dict) -> None:
         pass
 
 
-@app.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     _log_usage(name, arguments)
     db = get_db()
@@ -585,6 +579,20 @@ def _format_gaps(gaps: list[dict], topic: str) -> str:
                 lines.append(f"  Note: {g['title']} ({g['folder']})")
             lines.append("")
     return "\n".join(lines)
+
+
+# mcp 2.x registers handlers on the constructor. The handlers take
+# (ctx, params) and return result objects; the two wrappers keep the
+# tool table and the dispatcher above in their 1.x shape.
+async def on_list_tools(ctx, params) -> ListToolsResult:
+    return ListToolsResult(tools=await list_tools())
+
+
+async def on_call_tool(ctx, params) -> CallToolResult:
+    return CallToolResult(content=await call_tool(params.name, params.arguments or {}))
+
+
+app = Server("root", on_list_tools=on_list_tools, on_call_tool=on_call_tool)
 
 
 async def main():
