@@ -39,11 +39,8 @@ ROOT connects your notes, meetings and emails into one queryable layer. You ask 
 ## Quick Start
 
 ```bash
-# Clone and install
-git clone https://github.com/mshadmanrahman/root-kg.git
-cd root-kg
-python -m venv .venv && source .venv/bin/activate
-pip install -e .
+# Install. A venv or pipx keeps the embedding model's dependencies out of your system Python
+pip install root-kg
 
 # Answer the setup wizard: where your notes live, which LLM backend
 root-kg init
@@ -53,9 +50,11 @@ root-index
 # Extract entities into the graph. This step calls an LLM
 root-index --extract
 
-# Register ROOT with Claude Code, using the absolute path to the venv
-claude mcp add root /path/to/root-kg/.venv/bin/root-server
+# Register ROOT with Claude Code, using the absolute path to the server
+claude mcp add root "$(which root-server)"
 ```
+
+`root-kg init` writes `config.yaml`, `data/` and `logs/` to `~/.root-kg`. Set `ROOT_KG_HOME` to put them somewhere else. A git clone keeps them in the repo root instead, see [Development](#development).
 
 Indexing prints what it touched, so you can see the incremental behaviour on the second run:
 
@@ -132,15 +131,15 @@ root-kg/
 │   ├── embeddings.py      # Local embeddings via sentence-transformers, zero API cost
 │   ├── chunker.py         # Splits long notes at heading boundaries
 │   ├── cli.py             # Setup wizard, stats, and cron-callable search and note ingest
-│   ├── paths.py           # Where config, data and logs live (repo root, or ROOT_KG_HOME)
+│   ├── paths.py           # Where config, data and logs live: ROOT_KG_HOME, the checkout, or ~/.root-kg
+│   ├── config.example.yaml  # Template that root-kg init copies into config.yaml
 │   ├── query.py           # Calls any ROOT tool from a shell or another agent
 │   ├── rootd.py           # Warm daemon: keeps DB and embedder loaded for fast local search
 │   ├── merge_cli.py       # Folds duplicate entity shards into one canonical entity
 │   ├── adapters/vault.py  # Markdown scanner for the vault and any extra root
 │   └── tools/             # search, patterns, correlations, graph, intelligence
-├── tests/                 # 65 tests over the DB, extractor and multi-root paths
+├── tests/                 # 70 tests over the DB, extractor and multi-root paths
 ├── templates/root-instructions.md  # Drop-in usage instructions for an agent
-├── config.example.yaml    # Copy to config.yaml, or let root-kg init do it
 └── run-indexer.sh         # Wrapper that activates the venv and runs an incremental pass
 ```
 
@@ -236,13 +235,13 @@ llm:
 
 Run `root-index --extract` on a schedule and ROOT stays current. Only changed notes are reprocessed, so a typical incremental run finishes in well under a minute.
 
-Cron is the simpler option on macOS. A launchd agent cannot read `~/Documents` or iCloud paths without a Full Disk Access grant, and cron sidesteps that:
+Cron and launchd both need the absolute path to `root-index`, which `which root-index` prints. Cron is the simpler option on macOS. A launchd agent cannot read `~/Documents` or iCloud paths without a Full Disk Access grant, and cron sidesteps that:
 
 ```bash
 crontab -e
 
 # Runs at :30, every two hours during the day
-30 8,10,12,14,16,18,20,22 * * * ANTHROPIC_API_KEY=your-key /path/to/root-kg/.venv/bin/root-index --extract >> ~/Library/Logs/root-indexer.log 2>&1
+30 8,10,12,14,16,18,20,22 * * * ANTHROPIC_API_KEY=your-key /path/to/root-index --extract >> ~/Library/Logs/root-indexer.log 2>&1
 ```
 
 If your vault sits outside those protected folders, launchd works and survives reboots. Save this as `~/Library/LaunchAgents/com.root-kg.refresh.plist`:
@@ -255,7 +254,7 @@ If your vault sits outside those protected folders, launchd works and survives r
   <key>Label</key><string>com.root-kg.refresh</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/path/to/root-kg/.venv/bin/root-index</string>
+    <string>/path/to/root-index</string>
     <string>--extract</string>
   </array>
   <key>StartInterval</key><integer>7200</integer>
@@ -289,14 +288,19 @@ The ROOT column is checked against this repo. The other columns come from each p
 
 ## Development
 
-Install the dev extra and run the suite from the repo root:
+Clone, install in editable mode with the dev extra, and run the suite from the repo root:
 
 ```bash
+git clone https://github.com/mshadmanrahman/root-kg.git
+cd root-kg
+python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
 ```
 
-65 tests pass, covering the database layer, the extraction pipeline and the multi-root indexing paths.
+70 tests pass, covering the database layer, the extraction pipeline, the multi-root indexing paths and where config lives. In a checkout, `root-kg init` writes `config.yaml`, `data/` and `logs/` next to `pyproject.toml` rather than to `~/.root-kg`.
+
+Releases go out from a tag: bump the version in `pyproject.toml` and `root_kg/__init__.py`, merge, then `git tag vX.Y.Z && git push origin vX.Y.Z`. The `release` workflow builds the sdist and wheel, checks the tag against the version, and publishes through PyPI trusted publishing.
 
 ## What went wrong and what I learned
 

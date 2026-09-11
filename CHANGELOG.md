@@ -7,9 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ## [2.0.0] - 2026-09-11
 
+### Added
+- Published on PyPI as `root-kg`, so `pip install root-kg` replaces the clone-and-venv path for people who want the tool rather than the code (#2).
+- `.github/workflows/release.yml`: pushing a `v*` tag builds the sdist and wheel, checks the tag against `pyproject.toml`, and publishes through PyPI trusted publishing. No API token in the repo.
+- `tests/test_paths.py` covers the three ways the home directory resolves, and `tests/test_server_import.py` imports the MCP server against the pinned SDK.
+
 ### Changed
 - All modules now live in one `root_kg/` package (`root_kg/adapters/`, `root_kg/tools/`). Console scripts (`root-kg`, `root-index`, `root-server`) are unchanged. Anything that ran `python indexer.py` or `python server.py` directly must switch to `root-index` / `root-server` or `python -m root_kg.indexer`.
-- Config, database and logs resolve through `root_kg/paths.py`: the repo root by default, or `ROOT_KG_HOME` when set.
+- Config, database and logs resolve through `root_kg/paths.py`: `ROOT_KG_HOME` when set, else the checkout root when `pyproject.toml` sits next to the package, else `~/.root-kg`. `root-kg init` creates that directory and prints it.
+- `config.example.yaml` and `.env.example` moved into `root_kg/` and ship inside the wheel, so `root-kg init` can copy them after a PyPI install.
+- `mcp` is pinned to `>=1.0.0,<2`. The 2.x SDK removed the low-level `Server.list_tools` / `call_tool` decorators the server is built on, and a fresh install was pulling 2.2.0 and crashing on start. Migrating to the 2.x API is a separate change.
+- `root-kg init` prints the `claude mcp add` line with the real path to `root-server`, found on PATH or next to the running interpreter.
 - Chunk size is read from config as `embeddings.max_chunk_chars` (default 4000). The old `max_chunk_tokens` and `split_on_headings` keys were never read and are gone from the example config.
 - Default synthesis model is `claude-sonnet-5`.
 

@@ -23,9 +23,12 @@ import yaml
 
 from root_kg.paths import PROJECT_ROOT
 CONFIG_PATH = PROJECT_ROOT / "config.yaml"
-CONFIG_EXAMPLE = PROJECT_ROOT / "config.example.yaml"
 ENV_PATH = PROJECT_ROOT / ".env"
-ENV_EXAMPLE = PROJECT_ROOT / ".env.example"
+
+# Templates ship inside the package so a PyPI install can run init too.
+PACKAGE_DIR = Path(__file__).resolve().parent
+CONFIG_EXAMPLE = PACKAGE_DIR / "config.example.yaml"
+ENV_EXAMPLE = PACKAGE_DIR / ".env.example"
 
 
 def init():
@@ -33,7 +36,10 @@ def init():
     print("=" * 50)
     print("  ROOT: Personal Knowledge Graph Setup")
     print("=" * 50)
+    print(f"  ROOT home: {PROJECT_ROOT}  (override with ROOT_KG_HOME)")
     print()
+
+    PROJECT_ROOT.mkdir(parents=True, exist_ok=True)
 
     # Step 1: Vault path
     vault_path = _ask_vault_path()
@@ -64,7 +70,8 @@ def init():
     print("     root-index --extract")
     print()
     print("  3. Register as MCP server in Claude Code:")
-    print('     claude mcp add root /absolute/path/to/root-kg/.venv/bin/root-server')
+    server_bin = shutil.which("root-server") or str(Path(sys.executable).with_name("root-server"))
+    print(f"     claude mcp add root {server_bin}")
     print()
     print("  4. Try it:")
     print('     root_search("your topic")')
