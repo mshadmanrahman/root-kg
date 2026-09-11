@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [2.1.0] - 2026-09-11
+
+### Changed
+- `root-server` runs on the mcp 2.x SDK. Tool handlers are passed to the `Server` constructor as `on_list_tools` / `on_call_tool` and return `ListToolsResult` / `CallToolResult`; the 18 tool definitions and the dispatcher are unchanged (#10).
+- `mcp` dependency is `>=2,<3`. The `<2` pin from 2.0.0 is gone.
+- 2.x `stdio_server` points fd 0 at the null device and fd 1 at stderr while serving, so stray prints from torch or sentence-transformers can no longer corrupt the JSON-RPC stream.
+
+### Added
+- `tests/test_server_tools.py` lists the tools through the 2.x handler and checks the unknown-tool path, so a schema or dispatch regression fails CI.
+
+---
+
 ## [2.0.0] - 2026-09-11
 
 ### Added

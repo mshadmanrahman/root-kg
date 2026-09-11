@@ -1,6 +1,6 @@
 [project]
 name = "root-kg"
-version = "2.0.0"
+version = "2.1.0"
 description = "Personal knowledge graph with entity extraction, GraphRAG, and MCP integration. Turns your notes into searchable intelligence."
 readme = "README.md"
 license = {text = "MIT"}
@@ -23,8 +23,8 @@ classifiers = [
 dependencies = [
     "sentence-transformers>=3.0.0",
     "sqlite-vec>=0.1.1",
-    # 2.x removed the low-level Server decorators that root_kg/server.py uses
-    "mcp>=1.0.0,<2",
+    # 2.x moved handler registration onto the Server constructor; see root_kg/server.py
+    "mcp>=2,<3",
     "pyyaml>=6.0",
 ]
 
