@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from db import RootDB
+from root_kg.db import RootDB
 
 if TYPE_CHECKING:
-    from embeddings import Embedder
+    from root_kg.embeddings import Embedder
 
 
 def entity_graph(
@@ -150,7 +150,7 @@ def influence_map(
 
 def _influence_from_search(project_name: str, db: RootDB, embedder: Embedder) -> str:
     """Fallback: build influence from semantic search when no graph entity exists."""
-    from tools.search import semantic_search
+    from root_kg.tools.search import semantic_search
     results = semantic_search(f"{project_name} team stakeholders", db, embedder, limit=10)
     if not results:
         return f"No information found about '{project_name}' in the knowledge graph."
@@ -177,7 +177,7 @@ def decision_trail(
     decision_entities = db.search_entities(topic, entity_type="decision")
 
     # Also search semantically for decision-related content
-    from tools.search import semantic_search
+    from root_kg.tools.search import semantic_search
     search_results = semantic_search(
         f"{topic} decision decided agreed strategy",
         db, embedder, limit=10,

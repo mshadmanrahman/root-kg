@@ -1,17 +1,14 @@
 """Tests for ROOT extraction pipeline."""
 
 import logging
-import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from db import RootDB
-from extractor import extract_all, _extract_note
+from root_kg.db import RootDB
+from root_kg.extractor import extract_all, _extract_note
 
 
 @pytest.fixture

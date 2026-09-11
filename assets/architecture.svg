@@ -119,5 +119,5 @@
   <text class="ac" x="300" y="445">root_ask question</text>
 
   <path class="acc" d="M1060 426 L1060 478 L256 478" marker-end="url(#arrowAccent)"/>
-  <text class="ac" x="300" y="496">llm.synthesize(), claude-sonnet-4-20250514</text>
+  <text class="ac" x="300" y="496">llm.synthesize(), claude-sonnet-5</text>
 </svg>

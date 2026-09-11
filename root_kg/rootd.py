@@ -10,18 +10,15 @@ from __future__ import annotations
 
 import json
 import logging
-import sys
 import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(PROJECT_ROOT))
+from root_kg.paths import PROJECT_ROOT
 
-from db import RootDB
-from embeddings import Embedder
-from tools.search import semantic_search
+from root_kg.db import RootDB
+from root_kg.embeddings import Embedder
+from root_kg.tools.search import semantic_search
 
 HOST = "127.0.0.1"
 PORT = 8767

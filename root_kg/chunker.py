@@ -11,11 +11,16 @@ import re
 MAX_CHUNK_CHARS = 4000  # ~1000 tokens, well within model limits
 
 
-def chunk_note(content: str, title: str = "") -> list[dict]:
+def chunk_size(config: dict) -> int:
+    """Chunk size in characters from config (embeddings.max_chunk_chars), else the default."""
+    return int((config.get("embeddings") or {}).get("max_chunk_chars", MAX_CHUNK_CHARS))
+
+
+def chunk_note(content: str, title: str = "", max_chars: int = MAX_CHUNK_CHARS) -> list[dict]:
     """Split a note into chunks suitable for embedding.
 
     Returns list of {"idx": int, "text": str}.
-    Short notes (<MAX_CHUNK_CHARS) stay as one chunk.
+    Short notes (<max_chars) stay as one chunk.
     Longer notes split at ## headings.
     """
     # Prepend title for context
@@ -25,7 +30,7 @@ def chunk_note(content: str, title: str = "") -> list[dict]:
     if not full_text:
         return []
 
-    if len(full_text) <= MAX_CHUNK_CHARS:
+    if len(full_text) <= max_chars:
         return [{"idx": 0, "text": full_text}]
 
     # Split at headings (## or ###)
@@ -35,7 +40,7 @@ def chunk_note(content: str, title: str = "") -> list[dict]:
     idx = 0
 
     for section in sections:
-        if len(current_chunk) + len(section) > MAX_CHUNK_CHARS and current_chunk:
+        if len(current_chunk) + len(section) > max_chars and current_chunk:
             chunks.append({"idx": idx, "text": current_chunk.strip()})
             idx += 1
             current_chunk = f"# {title}\n\n" if title else ""
@@ -45,4 +50,4 @@ def chunk_note(content: str, title: str = "") -> list[dict]:
     if current_chunk.strip():
         chunks.append({"idx": idx, "text": current_chunk.strip()})
 
-    return chunks if chunks else [{"idx": 0, "text": full_text[:MAX_CHUNK_CHARS]}]
+    return chunks if chunks else [{"idx": 0, "text": full_text[:max_chars]}]

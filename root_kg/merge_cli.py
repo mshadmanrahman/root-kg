@@ -7,9 +7,9 @@ SAFE db.merge_entities() for each loser inside its own transaction, runs an
 integrity_check, and restarts the daemons.
 
 Usage:
-  python merge_cli.py --keep "Alex Chen" --merge "Alex" "A. Chen"          # dry-run
-  python merge_cli.py --keep "Alex Chen" --merge "Alex" "A. Chen" --execute
-  python merge_cli.py --keep 4009 --merge 53 --execute                    # by id
+  python -m root_kg.merge_cli --keep "Alex Chen" --merge "Alex" "A. Chen"   # dry-run
+  python -m root_kg.merge_cli --keep "Alex Chen" --merge "Alex" "A. Chen" --execute
+  python -m root_kg.merge_cli --keep 4009 --merge 53 --execute             # by id
 
 Names are resolved case-insensitively against entity names; if a name matches
 several entities the candidates are printed and the run aborts (be explicit with
@@ -24,16 +24,16 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-DB = HERE / "data" / "root.db"
+from root_kg.paths import PROJECT_ROOT
+
+DB = PROJECT_ROOT / "data" / "root.db"
 # Optional belt-and-suspenders: stop writer daemons during the merge. The merge
 # is already atomic + WAL-safe + backed up, so this is opt-in. Set ROOT_DAEMONS
 # to a comma-separated list of launchd labels (macOS) to enable, e.g.
-#   ROOT_DAEMONS="com.you.rootd,com.you.root-graph" python merge_cli.py ...
+#   ROOT_DAEMONS="com.you.rootd,com.you.root-graph" python -m root_kg.merge_cli ...
 DAEMONS = [d.strip() for d in os.environ.get("ROOT_DAEMONS", "").split(",") if d.strip()]
 
-sys.path.insert(0, str(HERE))
-from db import RootDB  # noqa: E402
+from root_kg.db import RootDB
 
 
 def resolve_arg(conn, token: str):

@@ -11,8 +11,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-from db import RootDB
-from llm import LLMClient
+from root_kg.db import RootDB
+from root_kg.llm import LLMClient
 
 
 # Generic phrases the extraction LLM sometimes emits as "aliases" but which are

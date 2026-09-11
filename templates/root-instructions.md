@@ -19,4 +19,4 @@ ROOT is a personal knowledge graph MCP server. Use ROOT tools for knowledge ques
 
 Vault path: `__VAULT_PATH__`
 
-To re-index: `cd <root-kg-dir> && source .venv/bin/activate && python indexer.py --extract`
+To re-index: `cd <root-kg-dir> && source .venv/bin/activate && python -m root_kg.indexer --extract`

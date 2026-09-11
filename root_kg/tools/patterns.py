@@ -7,8 +7,8 @@ Cluster embeddings to find themes, connections, and gaps.
 import struct
 from collections import defaultdict
 
-from db import RootDB
-from embeddings import Embedder
+from root_kg.db import RootDB
+from root_kg.embeddings import Embedder
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:

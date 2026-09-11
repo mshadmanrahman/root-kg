@@ -21,7 +21,7 @@ from pathlib import Path
 import yaml
 
 
-PROJECT_ROOT = Path(__file__).parent
+from root_kg.paths import PROJECT_ROOT
 CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 CONFIG_EXAMPLE = PROJECT_ROOT / "config.example.yaml"
 ENV_PATH = PROJECT_ROOT / ".env"
@@ -200,7 +200,7 @@ def _create_env(backend: str, api_key: str) -> None:
 
 def stats():
     """Show ROOT index and graph statistics."""
-    from db import RootDB
+    from root_kg.db import RootDB
     db = RootDB(PROJECT_ROOT / "data/root.db")
 
     index_stats = db.get_stats()
@@ -240,9 +240,9 @@ def search(query: str, limit: int = 5) -> None:
     config = _load_config()
     db_path = PROJECT_ROOT / config["database"]["path"]
 
-    from db import RootDB
-    from embeddings import Embedder
-    from tools.search import semantic_search
+    from root_kg.db import RootDB
+    from root_kg.embeddings import Embedder
+    from root_kg.tools.search import semantic_search
 
     try:
         db = RootDB(db_path)
@@ -274,9 +274,9 @@ def note(content: str, tags: list[str] | None = None) -> None:
     config = _load_config()
     db_path = PROJECT_ROOT / config["database"]["path"]
 
-    from chunker import chunk_note
-    from db import RootDB
-    from embeddings import Embedder
+    from root_kg.chunker import chunk_note, chunk_size
+    from root_kg.db import RootDB
+    from root_kg.embeddings import Embedder
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -310,7 +310,7 @@ def note(content: str, tags: list[str] | None = None) -> None:
             indexed_at=now,
         )
 
-        chunks = chunk_note(indexed_content, title)
+        chunks = chunk_note(indexed_content, title, max_chars=chunk_size(config))
         if chunks:
             texts = [c["text"] for c in chunks]
             embeddings = embedder.embed_batch(texts)
@@ -342,12 +342,12 @@ def main():
     elif command == "stats":
         stats()
     elif command == "index":
-        from indexer import main as index_main
+        from root_kg.indexer import main as index_main
         sys.argv = sys.argv[1:]  # Shift args for indexer's argparse
         index_main()
     elif command == "extract":
         sys.argv = ["indexer", "--extract-only"] + sys.argv[2:]
-        from indexer import main as index_main
+        from root_kg.indexer import main as index_main
         index_main()
     elif command == "search":
         import argparse

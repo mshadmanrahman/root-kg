@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [2.0.0] - 2026-09-11
+
+### Changed
+- All modules now live in one `root_kg/` package (`root_kg/adapters/`, `root_kg/tools/`). Console scripts (`root-kg`, `root-index`, `root-server`) are unchanged. Anything that ran `python indexer.py` or `python server.py` directly must switch to `root-index` / `root-server` or `python -m root_kg.indexer`.
+- Config, database and logs resolve through `root_kg/paths.py`: the repo root by default, or `ROOT_KG_HOME` when set.
+- Chunk size is read from config as `embeddings.max_chunk_chars` (default 4000). The old `max_chunk_tokens` and `split_on_headings` keys were never read and are gone from the example config.
+- Default synthesis model is `claude-sonnet-5`.
+
+### Removed
+- `[tool.setuptools] py-modules` list; setuptools finds the package on its own.
+
 ## [1.2.1] - 2026-09-11
 
 ### Fixed

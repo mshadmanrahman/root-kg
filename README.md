@@ -123,27 +123,25 @@ Extraction runs on every changed note, so it uses Haiku (`llm.extraction_model` 
 
 ```
 root-kg/
-├── server.py            # MCP server: exposes the 18 tools over stdio
-├── indexer.py           # Reads configured sources, embeds them, orchestrates extraction
-├── extractor.py         # Incremental, hash-tracked entity and relation extraction
-├── db.py                # SQLite + sqlite-vec storage and entity graph with BFS traversal
-├── llm.py               # Multi-backend LLM client for extraction and synthesis
-├── embeddings.py        # Local embeddings via sentence-transformers, zero API cost
-├── chunker.py           # Splits long notes at heading boundaries
-├── cli.py               # Setup wizard, stats, and cron-callable search and note ingest
-├── __main__.py          # Module entry point, forwards to the CLI
-├── query.py             # Calls any ROOT tool from a shell or another agent
-├── rootd.py             # Warm daemon: keeps DB and embedder loaded for fast local search
-├── merge_cli.py         # Folds duplicate entity shards into one canonical entity
-├── run-indexer.sh       # Wrapper that activates the venv and runs an incremental pass
-├── adapters/vault.py    # Markdown scanner for the vault and any extra root
-├── tools/search.py      # Semantic search, recency-boosted
-├── tools/patterns.py    # Themes, connections and gaps via embedding clustering
-├── tools/correlations.py# People, open loops and project pulse across sources
-├── tools/graph.py       # Entity neighborhood, influence map, decision trail, blind spots
-├── tools/intelligence.py# root_ask and the weekly digest
+├── root_kg/
+│   ├── server.py          # MCP server: exposes the 18 tools over stdio
+│   ├── indexer.py         # Reads configured sources, embeds them, orchestrates extraction
+│   ├── extractor.py       # Incremental, hash-tracked entity and relation extraction
+│   ├── db.py              # SQLite + sqlite-vec storage and entity graph with BFS traversal
+│   ├── llm.py             # Multi-backend LLM client for extraction and synthesis
+│   ├── embeddings.py      # Local embeddings via sentence-transformers, zero API cost
+│   ├── chunker.py         # Splits long notes at heading boundaries
+│   ├── cli.py             # Setup wizard, stats, and cron-callable search and note ingest
+│   ├── paths.py           # Where config, data and logs live (repo root, or ROOT_KG_HOME)
+│   ├── query.py           # Calls any ROOT tool from a shell or another agent
+│   ├── rootd.py           # Warm daemon: keeps DB and embedder loaded for fast local search
+│   ├── merge_cli.py       # Folds duplicate entity shards into one canonical entity
+│   ├── adapters/vault.py  # Markdown scanner for the vault and any extra root
+│   └── tools/             # search, patterns, correlations, graph, intelligence
+├── tests/                 # 65 tests over the DB, extractor and multi-root paths
 ├── templates/root-instructions.md  # Drop-in usage instructions for an agent
-└── tests/               # 65 tests over the DB, extractor and multi-root paths
+├── config.example.yaml    # Copy to config.yaml, or let root-kg init do it
+└── run-indexer.sh         # Wrapper that activates the venv and runs an incremental pass
 ```
 
 Design principles worth knowing before you read the code: one SQLite file and no other server, no vendor SDK for LLM calls (stdlib `urllib` only), incremental everything through content hashing, and per-root safety guards so an unmounted drive skips its stale sweep instead of purging your index.
@@ -244,7 +242,7 @@ Cron is the simpler option on macOS. A launchd agent cannot read `~/Documents` o
 crontab -e
 
 # Runs at :30, every two hours during the day
-30 8,10,12,14,16,18,20,22 * * * ANTHROPIC_API_KEY=your-key /path/to/root-kg/.venv/bin/python /path/to/root-kg/indexer.py --extract >> ~/Library/Logs/root-indexer.log 2>&1
+30 8,10,12,14,16,18,20,22 * * * ANTHROPIC_API_KEY=your-key /path/to/root-kg/.venv/bin/root-index --extract >> ~/Library/Logs/root-indexer.log 2>&1
 ```
 
 If your vault sits outside those protected folders, launchd works and survives reboots. Save this as `~/Library/LaunchAgents/com.root-kg.refresh.plist`:
@@ -257,8 +255,7 @@ If your vault sits outside those protected folders, launchd works and survives r
   <key>Label</key><string>com.root-kg.refresh</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/path/to/root-kg/.venv/bin/python</string>
-    <string>/path/to/root-kg/indexer.py</string>
+    <string>/path/to/root-kg/.venv/bin/root-index</string>
     <string>--extract</string>
   </array>
   <key>StartInterval</key><integer>7200</integer>

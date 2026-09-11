@@ -16,18 +16,18 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
-from db import RootDB
-from embeddings import Embedder
-from chunker import chunk_note
-from llm import LLMClient
-from tools.search import semantic_search, search_by_folder
-from tools.patterns import find_connections, discover_themes, find_gaps
-from tools.correlations import about_person, open_loops, project_pulse
-from tools.graph import entity_graph, influence_map, decision_trail, blind_spots
-from tools.intelligence import ask, weekly_digest
+from root_kg.db import RootDB
+from root_kg.embeddings import Embedder
+from root_kg.chunker import chunk_note, chunk_size
+from root_kg.llm import LLMClient
+from root_kg.tools.search import semantic_search, search_by_folder
+from root_kg.tools.patterns import find_connections, discover_themes, find_gaps
+from root_kg.tools.correlations import about_person, open_loops, project_pulse
+from root_kg.tools.graph import entity_graph, influence_map, decision_trail, blind_spots
+from root_kg.tools.intelligence import ask, weekly_digest
 
 # Load config
-PROJECT_ROOT = Path(__file__).parent
+from root_kg.paths import PROJECT_ROOT
 CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 
 with open(CONFIG_PATH) as f:
@@ -515,7 +515,7 @@ def _ingest_single(item: dict, db: RootDB, embedder: Embedder) -> str:
     )
 
     # Chunk and embed
-    chunks = chunk_note(content, title)
+    chunks = chunk_note(content, title, max_chars=chunk_size(CONFIG))
     if chunks:
         texts = [c["text"] for c in chunks]
         embeddings = embedder.embed_batch(texts)

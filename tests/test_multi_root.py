@@ -1,15 +1,12 @@
 """Tests for multi-root indexing and the extraction cost gate."""
 
-import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from db import RootDB
-from indexer import configured_roots, extraction_source_types
+from root_kg.db import RootDB
+from root_kg.indexer import configured_roots, extraction_source_types
 
 
 @pytest.fixture
